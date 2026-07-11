@@ -1,5 +1,5 @@
 /* Investigación Fantasma — service worker */
-const VERSION = 'fantasma-v3';
+const VERSION = 'fantasma-v4';
 const APP_SHELL = [
   './',
   './index.html',
