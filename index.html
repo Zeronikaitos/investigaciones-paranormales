@@ -554,10 +554,13 @@
     }catch(e){}
   }
   // Stop only the audio tracks (keep video preview) so the mic is free for speech recognition.
-  // Never do it while a recording that exports audio is running — it would silence the video.
+  // Never do it while a recording that exports audio is running — it would silence/corrupt the video.
+  // Checked two ways on purpose: the state flag AND the recorder's own live state, so a future
+  // ordering mistake in one can't silently reintroduce "recording gets its audio track killed mid-capture".
   function releaseMic(){
     if(!stream) return;
-    if(state.recording && state.settings.exportAudio) return;
+    const recorderIsRecording = !!(recorder && recorder.state==='recording');
+    if((state.recording || recorderIsRecording) && state.settings.exportAudio) return;
     const at=stream.getAudioTracks();
     if(!at.length) return;
     at.forEach(t=>{ try{ t.stop(); }catch(e){} try{ stream.removeTrack(t); }catch(e){} });
@@ -603,7 +606,11 @@
   // Detection buffer: Chrome/webkit often finalizes speech mid-phrase after a short
   // pause (e.g. "buenas" then "buenas noches" as two separate finals for one utterance).
   // Instead of logging every final immediately, hold it briefly to catch a continuation.
-  const FINAL_COMMIT_MS = 1100;
+  // Raised from 1100→1700ms and, below, extended further on ANY live activity (even
+  // interim/non-final results) — slow, deliberately-paced speech has longer gaps
+  // between words than quick speech, and was getting split into separate fragments
+  // instead of merging into the full phrase.
+  const FINAL_COMMIT_MS = 1700;
   let pendingFinalText='', pendingFinalTimer=null;
   function mergeFragments(prev, next){
     const p=prev.trim(), n=next.trim();
@@ -651,6 +658,13 @@
         } else interim+=res[0].transcript;
       }
       state.interim=interim.trim(); syncPhrases();
+      // Live activity while a phrase is pending: the person is still speaking
+      // (e.g. slowly, with pauses between words) — extend the window instead of
+      // letting it flush mid-phrase just because the next word hasn't finalized yet.
+      if(interim.trim() && pendingFinalTimer){
+        clearTimeout(pendingFinalTimer);
+        pendingFinalTimer=setTimeout(flushPendingFinal, FINAL_COMMIT_MS);
+      }
     };
     r.onerror=e=>{
       const err=(e&&e.error)||'';
@@ -772,11 +786,19 @@
         recorder=new MediaRecorder(recStream,opts);
         recorder.ondataavailable=e=>{ if(e.data && e.data.size) chunks.push(e.data); };
         recorder.onstop=finalizeRecording;
+        // Mark recording BEFORE anything else runs — startListen() below calls
+        // releaseMic(), whose guard checks state.recording to avoid killing the
+        // audio track of an in-progress recording. If that flag were still false
+        // here, the guard would fail and stopping the audio track mid-recording
+        // is exactly what was corrupting the exported WebM.
+        state.recording=true;
         recorder.start();
-      }catch(e){}
+      }catch(e){ state.recording=false; }
+    } else {
+      state.recording=true;
     }
     startListen();
-    state.recording=true; syncMain();
+    syncMain();
   }
   function stopRecording(){
     const sess=state.sessionName;
