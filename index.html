@@ -470,7 +470,9 @@
     cNeedCreds:"Falta la credencial del servicio", cUploading:"Subiendo a la nube…", cUploaded:"Subido a la nube", cUploadFail:"Falló la subida a la nube", cConnFail:"No se pudo conectar",
     zipSaved:"Guardado en .ZIP", folderSaved:"Guardado en carpeta",
     sttUnsup:"Reconocimiento de voz no soportado en este navegador", sttHttps:"El reconocimiento de voz requiere HTTPS (no funciona abriendo el archivo directo)",
-    sttDenied:"Permiso de micrófono denegado", sttListening:"escuchando…", sttError:"Error de reconocimiento", sttRetry:"reconectando…"
+    sttDenied:"Permiso de micrófono denegado", sttListening:"escuchando…", sttError:"Error de reconocimiento", sttRetry:"reconectando…",
+    sttMicBusy:"Micrófono ocupado por otra captura — desactiva 'Exportar pista de audio' o cierra otras apps que usen el micro",
+    sttNetDown:"Sin conexión con el servicio de voz — el reconocimiento necesita internet"
   });
   Object.assign(DICT.en, {
     lockCreateTitle:"Create your identity", lockCreateSub:"A unique key for this device and an .ADFK backup file will be generated.",
@@ -488,7 +490,9 @@
     cNeedCreds:"Service credential missing", cUploading:"Uploading to cloud…", cUploaded:"Uploaded to cloud", cUploadFail:"Cloud upload failed", cConnFail:"Could not connect",
     zipSaved:"Saved as .ZIP", folderSaved:"Saved to folder",
     sttUnsup:"Speech recognition not supported in this browser", sttHttps:"Speech recognition requires HTTPS (won't work opening the raw file)",
-    sttDenied:"Microphone permission denied", sttListening:"listening…", sttError:"Recognition error", sttRetry:"reconnecting…"
+    sttDenied:"Microphone permission denied", sttListening:"listening…", sttError:"Recognition error", sttRetry:"reconnecting…",
+    sttMicBusy:"Mic captured by another recording — turn off 'Export audio track' or close other apps using the mic",
+    sttNetDown:"Can't reach the speech service — recognition needs internet"
   });
 
   const SIM_PHRASES = {
@@ -532,23 +536,54 @@
   }
   function setupAnalyser(st){
     try{
+      if(!st.getAudioTracks().length) return;
       const AC=window.AudioContext||window.webkitAudioContext;
-      audioCtx=new AC();
+      if(!audioCtx) audioCtx=new AC();
+      if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
       const src=audioCtx.createMediaStreamSource(st);
       analyser=audioCtx.createAnalyser(); analyser.fftSize=128; analyser.smoothingTimeConstant=0.75;
       src.connect(analyser); freq=new Uint8Array(analyser.frequencyBinCount);
     }catch(e){}
   }
-  async function ensureCamera(){
+  // Stop only the audio tracks (keep video preview) so the mic is free for speech recognition.
+  // Never do it while a recording that exports audio is running — it would silence the video.
+  function releaseMic(){
+    if(!stream) return;
+    if(state.recording && state.settings.exportAudio) return;
+    const at=stream.getAudioTracks();
+    if(!at.length) return;
+    at.forEach(t=>{ try{ t.stop(); }catch(e){} try{ stream.removeTrack(t); }catch(e){} });
+    analyser=null; freq=null;
+  }
+  // wantAudio=false → video-only, leaving the mic FREE for speech recognition.
+  // wantAudio=true  → include the mic track (needed when recording with audio export).
+  async function ensureCamera(wantAudio){
     if(state.sim) return true;
-    if(stream) return true;
+    const needAudio=!!wantAudio;
+    if(stream){
+      const hasAudio=stream.getAudioTracks().length>0;
+      if(needAudio && hasAudio) return true;
+      if(!needAudio){
+        // CRITICAL: if a previous recording left the mic captured, release it now,
+        // otherwise speech recognition gets no audio and loops "reconnecting".
+        if(hasAudio) releaseMic();
+        return true;
+      }
+      // We need audio now but the current stream is video-only: re-acquire.
+      try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+      stream=null; analyser=null; freq=null;
+    }
     try{
-      stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:'user'},audio:true});
-      setupAnalyser(stream);
+      stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:'user'},audio:needAudio});
+      if(needAudio) setupAnalyser(stream);
       state.cameraReady=true; state.camError='';
       attachStream(); sync();
       return true;
     }catch(e){
+      if(needAudio){ // audio may have been blocked; fall back to video-only so preview still works
+        try{ stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:'user'},audio:false});
+          state.cameraReady=true; state.camError=''; attachStream(); sync(); return true; }catch(_){}
+      }
       state.camError=S().camFail; sync();
       return false;
     }
@@ -556,7 +591,7 @@
   function stopStream(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} }
 
   /* ---------- speech recognition ---------- */
-  let recognizing=false, sttFatal=false;
+  let recognizing=false, sttFatal=false, sttFailStreak=0, lastSttErr='';
   function setStt(text, isErr){
     const box=$('sttStatus');
     if(!text){ box.classList.remove('on'); return; }
@@ -570,7 +605,9 @@
     const r=new SR(); r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
     r.lang=state.lang==='es'?'es-ES':'en-US';
     r.onstart=()=>{ recognizing=true; setStt(S().sttListening,false); };
+    r.onaudiostart=()=>{ sttFailStreak=0; setStt(S().sttListening,false); };
     r.onresult=e=>{
+      sttFailStreak=0;
       let interim='';
       for(let i=e.resultIndex;i<e.results.length;i++){
         const res=e.results[i];
@@ -579,16 +616,35 @@
       state.interim=interim.trim(); syncPhrases();
     };
     r.onerror=e=>{
-      const err=e&&e.error;
+      const err=(e&&e.error)||'';
+      lastSttErr=err;
       if(err==='not-allowed'||err==='service-not-allowed'){ sttFatal=true; setStt(S().sttDenied,true); }
-      else if(err==='no-speech'||err==='aborted'){ /* transient: onend will restart */ }
-      else if(err==='network'){ setStt(S().sttRetry,true); }
-      else { setStt(S().sttError,true); }
+      else if(err==='audio-capture'){ sttFailStreak++; setStt(S().sttMicBusy,true); }
+      else if(err==='network'){ sttFailStreak++; setStt(S().sttRetry,true); }
+      else if(err==='no-speech'){ /* normal silence timeout: NOT a failure */ lastSttErr=''; }
+      else if(err==='aborted'){ lastSttErr=''; }
+      else { sttFailStreak++; setStt(S().sttError,true); }
     };
     r.onend=()=>{
       recognizing=false;
-      if(state.listening && !sttFatal){ setStt(S().sttRetry,false); setTimeout(()=>{ if(state.listening){ try{ r.start(); }catch(_){} } },350); }
-      else if(!state.listening){ setStt('',false); }
+      if(!state.listening){ setStt('',false); return; }
+      if(sttFatal) return;
+      // Persistent failure: surface a concrete diagnosis instead of looping forever.
+      if(sttFailStreak>=4){
+        setStt(lastSttErr==='network' ? S().sttNetDown : S().sttMicBusy, true);
+        showToast(lastSttErr==='network' ? S().sttNetDown : S().sttMicBusy);
+        sttFailStreak=0;
+      }
+      // Silence timeouts restart immediately and quietly; real errors back off.
+      const wasSilence=!lastSttErr;
+      const delay=wasSilence ? 120 : Math.min(300*Math.pow(2,sttFailStreak), 3000);
+      if(!wasSilence) setStt(S().sttRetry,false);
+      setTimeout(()=>{
+        if(!state.listening || sttFatal) return;
+        releaseMic(); // make sure nothing re-captured the mic while we were down
+        lastSttErr='';
+        try{ r.start(); }catch(_){}
+      }, delay);
     };
     return r;
   }
@@ -598,8 +654,9 @@
     if(state.sim){ state.listening=true; setStt(S().sttListening,false); startSimPhrases(); syncMain(); return; }
     if(!window.isSecureContext){ showToast(S().sttHttps); setStt(S().sttHttps,true); }
     if(!sttSupported()){ showToast(S().sttUnsup); setStt(S().sttUnsup,true); }
-    await ensureCamera();
-    sttFatal=false;
+    await ensureCamera(false); // video only → mic stays free for recognition
+    releaseMic(); // belt & suspenders: never start recognition with the mic captured
+    sttFatal=false; sttFailStreak=0; lastSttErr='';
     if(!recognition) recognition=initRecognition();
     if(!recognition){ setStt(S().sttUnsup,true); return; }
     recognition.lang=state.lang==='es'?'es-ES':'en-US';
@@ -657,7 +714,9 @@
   async function toggleRecord(){
     if(state.recording){ stopRecording(); return; }
     if(!state.sim){
-      const ok=await ensureCamera(); if(!ok) return;
+      // Only grab the mic for the recording if the user wants the audio track.
+      // Otherwise keep it video-only so speech recognition keeps the mic and detection works.
+      const ok=await ensureCamera(!!state.settings.exportAudio); if(!ok) return;
       try{
         chunks=[]; recStream=buildRecStream();
         const opts={};
@@ -675,11 +734,13 @@
   }
   function stopRecording(){
     const sess=state.sessionName;
+    state.recording=false; // set first so finalizeRecording (onstop) is allowed to release the mic
     try{ if(recorder && recorder.state!=='inactive') recorder.stop(); else finalizeRecording(sess); }catch(e){ finalizeRecording(sess); }
     stopListen();
-    state.recording=false; syncMain(); maybeEndSession();
+    syncMain(); maybeEndSession();
   }
   async function finalizeRecording(){
+    releaseMic(); // free the mic as soon as the recorder is done, so detection keeps working
     const sess=state.sessionName||('VID_'+String(state.sessionCount||1).padStart(4,'0'));
     const g=state.settings;
     const files=[];
@@ -916,7 +977,7 @@
   $('menuClose').onclick=$('menuScrim').onclick=()=>{state.menuOpen=false;sync();};
   $('btnLangTop').onclick=switchLang;
   $('btnLangMenu').onclick=switchLang;
-  $('camPrompt').onclick=ensureCamera;
+  $('camPrompt').onclick=()=>ensureCamera(false);
   $('btnRec').onclick=toggleRecord;
   $('btnMic').onclick=()=>{ state.listening?stopListen():startListen(); };
   $('btnPanic').onclick=()=>{state.menuOpen=false;state.panicOpen=true;sync();};
