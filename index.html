@@ -34,7 +34,8 @@
   }
   @media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important;} }
 
-  #stage{transform-origin:center center;}
+  #stage{transform-origin:center center;opacity:0;transition:opacity .15s ease;}
+  #stage.ready{opacity:1;}
 
   .phone{
     position:relative;width:390px;height:844px;border-radius:38px;overflow:hidden;
@@ -58,8 +59,12 @@
   .lang-btn{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--dark);border:1.5px solid var(--dark);border-radius:999px;padding:5px 11px;cursor:pointer;user-select:none;}
 
   .cam-wrap{display:flex;justify-content:center;margin-top:24px;}
-  .cam{position:relative;width:256px;height:256px;border-radius:50%;overflow:hidden;background:var(--orange);border:6px solid var(--dark);box-shadow:0 18px 34px -14px rgba(0,0,0,.55);}
+  .cam-inner{position:relative;width:256px;height:256px;}
+  .cam{position:absolute;inset:0;border-radius:50%;overflow:hidden;background:var(--orange);border:6px solid var(--dark);box-shadow:0 18px 34px -14px rgba(0,0,0,.55);}
+  .flip-cam{position:absolute;right:-2px;bottom:6px;width:42px;height:42px;border-radius:50%;background:var(--dark);color:var(--orange);border:3px solid var(--orange);display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 8px 16px -8px rgba(0,0,0,.6);z-index:3;}
+  .flip-cam:active{transform:scale(.92);}
   .cam video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);display:block;}
+  .cam video.back-cam{transform:scaleX(1);}
   .cam canvas.sim{position:absolute;inset:0;width:100%;height:100%;display:block;}
   .cam .recring{position:absolute;inset:0;border-radius:50%;box-shadow:inset 0 0 0 4px var(--red);pointer-events:none;}
   .cam .prompt{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;cursor:pointer;background:var(--orange);}
@@ -204,6 +209,13 @@
   .stt.err{color:#fff;} .stt.err .sd{background:#fff;animation:none;}
 
   /* lock screen */
+  /* camera-loading blocking overlay */
+  .cam-loading{position:absolute;inset:0;z-index:55;background:rgba(41,41,41,.72);display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;text-align:center;padding:26px;}
+  .cam-loading.on{display:flex;}
+  .spinner{width:46px;height:46px;border-radius:50%;border:4px solid rgba(255,255,255,.25);border-top-color:var(--orange);animation:spin .8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .cam-loading-text{font-size:12px;font-weight:700;color:var(--white);letter-spacing:.04em;max-width:240px;line-height:1.5;}
+
   .lock{position:absolute;inset:0;z-index:60;background:linear-gradient(180deg,var(--orange) 0%,var(--orange-d) 100%);display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px 26px;text-align:center;}
   .lock.on{display:flex;}
   body.device .lock{padding-top:calc(32px + env(safe-area-inset-top));padding-bottom:calc(32px + env(safe-area-inset-bottom));}
@@ -234,6 +246,44 @@
 </style>
 </head>
 <body>
+<script>
+  // ================= Local offline speech-to-text bridge (runs the heavy work in a Worker) =================
+  // The actual model (Whisper via Transformers.js) loads and runs entirely inside
+  // asr-worker.js, off the main thread. This used to load inline here and could
+  // block page rendering — including the camera preview — for up to a minute
+  // during WASM compile/model download. Now it never touches the main thread.
+  (function(){
+    let worker=null, reqId=0; const pending=new Map();
+    function getWorker(){
+      if(!worker){
+        worker=new Worker('asr-worker.js', { type:'module' });
+        worker.onmessage=(e)=>{
+          const {type,id}=e.data||{}; const p=pending.get(id); if(!p) return;
+          pending.delete(id);
+          if(type==='error') p.reject(new Error(e.data.message||'ASR worker error'));
+          else p.resolve(e.data);
+        };
+        worker.onerror=()=>{ /* individual calls are rejected via their own timeout/message below */ };
+      }
+      return worker;
+    }
+    function call(msg, transfer){
+      return new Promise((resolve,reject)=>{
+        const id=++reqId; pending.set(id,{resolve,reject});
+        try{ getWorker().postMessage(Object.assign({id},msg), transfer||[]); }
+        catch(e){ pending.delete(id); reject(e); }
+      });
+    }
+    window.__localASR = {
+      load: ()=>call({type:'load'}),
+      transcribe: async (float32, language) => {
+        // Transfer the buffer instead of copying it — chunks are a few MB each.
+        const res = await call({type:'transcribe', audio:float32, language}, [float32.buffer]);
+        return res.text||'';
+      }
+    };
+  })();
+</script>
 <div id="stage">
   <div class="phone" id="phone">
 
@@ -248,14 +298,19 @@
         </div>
 
         <div class="cam-wrap">
-          <div class="cam">
-            <video id="video" muted playsinline autoplay></video>
-            <canvas class="sim" id="simCam" width="256" height="256" style="display:none;"></canvas>
-            <div class="recring" id="recRing" style="display:none;"></div>
-            <div class="prompt" id="camPrompt">
-              <div class="cam-icon"><div class="lens"></div><div class="ring"></div><div class="pupil"></div></div>
-              <div class="prompt-txt" id="camPromptTxt"></div>
+          <div class="cam-inner">
+            <div class="cam">
+              <video id="video" muted playsinline autoplay></video>
+              <canvas class="sim" id="simCam" width="256" height="256" style="display:none;"></canvas>
+              <div class="recring" id="recRing" style="display:none;"></div>
+              <div class="prompt" id="camPrompt">
+                <div class="cam-icon"><div class="lens"></div><div class="ring"></div><div class="pupil"></div></div>
+                <div class="prompt-txt" id="camPromptTxt"></div>
+              </div>
             </div>
+            <button class="flip-cam" id="btnFlipCam" aria-label="Flip camera">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"></path><path d="M3 12.7V12a9 9 0 0 1 15-6.7l3 2.8"></path><path d="M7 21.9l-4-4 4-4"></path><path d="M21 11.3V12a9 9 0 0 1-15 6.7l-3-2.8"></path></svg>
+            </button>
           </div>
         </div>
 
@@ -317,6 +372,7 @@
         <div class="sect-lbl" id="vTrack"></div>
         <div class="opt" data-set="exportAudio" data-val="false"><span class="radio"><span class="fill"></span></span><span class="otext" id="vNoTrack"></span></div>
         <div class="opt" data-set="exportAudio" data-val="true"><span class="radio"><span class="fill"></span></span><span class="otext" id="vYesTrack"></span></div>
+        <div class="lock-note" id="vTrackNote" style="text-align:left;margin:6px 4px 0;"></div>
         <div class="sect-lbl" id="vSubs"></div>
         <div class="opt" data-set="exportSubs" data-val="false"><span class="radio"><span class="fill"></span></span><span class="otext" id="vNoSubs"></span></div>
         <div class="opt" data-set="exportSubs" data-val="true"><span class="radio"><span class="fill"></span></span><span class="otext" id="vYesSubs"></span></div>
@@ -385,6 +441,12 @@
       </div>
     </div>
 
+    <!-- CAMERA LOADING (blocks all interaction while acquiring the camera/mic) -->
+    <div class="cam-loading" id="camLoading">
+      <div class="spinner" aria-hidden="true"></div>
+      <div class="cam-loading-text" id="camLoadingText"></div>
+    </div>
+
     <!-- LOCK / LOGIN -->
     <div class="lock" id="lockScreen">
       <div class="lock-badge">
@@ -399,9 +461,10 @@
         <input class="field hide" id="pinInput2" type="password" inputmode="numeric" maxlength="12" autocomplete="off">
         <div class="lock-note hide" id="lockNote"></div>
         <button class="btn-primary" id="btnPrimaryAuth"></button>
+        <button class="btn-outline" id="btnSwitchMethod" style="display:none;"></button>
         <button class="btn-outline" id="btnImportId"></button>
       </div>
-      <input type="file" id="adfkFile" accept=".ADFK,.adfk,application/json" class="hide">
+      <input type="file" id="adfkFile" accept=".ADFK,.adfk,.json,application/json,text/plain,application/octet-stream,*/*" class="hide">
     </div>
 
     <div class="toast" id="toast"></div>
@@ -424,10 +487,13 @@
       audioTitle:"Opciones de audio", aQuality:"Profundidad / Bitrate", aChan:"Canales", a16:"16 bit PCM", a128:"128 kbps AAC", aMono:"Mono", aStereo:"Estéreo",
       videoTitle:"Opciones de video", vStorage:"Almacenamiento", vDevice:"Guardar en dispositivo", vMemory:"Guardar en memoria", vCloud:"Guardar en la nube",
       vTrack:"Pista de audio", vNoTrack:"No exportar pista de audio", vYesTrack:"Exportar pista de audio",
+      vTrackNote:"Si exportas la pista de audio, la detección de frases usa un modelo local sin conexión durante esa grabación (un poco más lenta y en fragmentos de ~5s en vez de en vivo palabra por palabra). La primera vez descarga el modelo (~40-75 MB).",
       vSubs:"Subtítulos", vNoSubs:"No exportar subtítulos", vYesSubs:"Exportar subtítulos",
       panicTitle:"¿Restaurar de fábrica?", panicBody:"Se restaurarán los ajustes originales de instalación y se borrará la bitácora. Esta acción no se puede deshacer.", panicOk:"Restaurar y borrar", panicCancel:"Cancelar",
       licTitle:"Licencia de uso", licBody:"Software para investigación paranormal. Uso educativo y de entretenimiento. © 2026 StreetTube. Todos los derechos reservados.", close:"Cerrar",
       camFail:"No se pudo acceder a la cámara/micrófono. Revisa los permisos del navegador.",
+      camLoadingDefault:"Activando cámara…",
+      flipWhileRecording:"Detén la grabación para cambiar de cámara", flipSim:"No aplica en modo simulación",
       noSpeech:"Reconocimiento de voz no disponible en este navegador",
       simOn:"Simulación activada", simOff:"Simulación desactivada",
       recSaved:"Grabación guardada", recMem:"Grabación guardada en memoria", recCloud:"Enviada a la nube (simulado)",
@@ -443,10 +509,13 @@
       audioTitle:"Audio options", aQuality:"Depth / Bitrate", aChan:"Channels", a16:"16 bit PCM", a128:"128 kbps AAC", aMono:"Mono", aStereo:"Stereo",
       videoTitle:"Video options", vStorage:"Storage", vDevice:"Save to device", vMemory:"Save to memory", vCloud:"Save to cloud",
       vTrack:"Audio track", vNoTrack:"Don't export audio track", vYesTrack:"Export audio track",
+      vTrackNote:"If you export the audio track, phrase detection uses a local offline model during that recording (a bit slower, in ~5s chunks instead of live word-by-word). First use downloads the model (~40-75 MB).",
       vSubs:"Subtitles", vNoSubs:"Don't export subtitles", vYesSubs:"Export subtitles",
       panicTitle:"Factory reset?", panicBody:"Original install settings will be restored and the log will be erased. This action cannot be undone.", panicOk:"Reset & erase", panicCancel:"Cancel",
       licTitle:"License", licBody:"Software for paranormal investigation. For educational and entertainment use. © 2026 StreetTube. All rights reserved.", close:"Close",
       camFail:"Could not access camera/mic. Check browser permissions.",
+      camLoadingDefault:"Turning on camera…",
+      flipWhileRecording:"Stop recording to switch cameras", flipSim:"Not available in simulation mode",
       noSpeech:"Speech recognition unavailable in this browser",
       simOn:"Simulation on", simOff:"Simulation off",
       recSaved:"Recording saved", recMem:"Recording saved to memory", recCloud:"Sent to cloud (simulated)",
@@ -461,6 +530,9 @@
     noteBio:"Se usará la huella, rostro o PIN de tu dispositivo.", notePin:"Este navegador no admite biometría. Define un PIN de 4+ dígitos.",
     phPin:"PIN", phPinNew:"Nuevo PIN (4+ dígitos)", phPinRepeat:"Repite el PIN", phPinEnter:"Ingresa tu PIN",
     errPinShort:"El PIN debe tener al menos 4 dígitos", errPinMismatch:"Los PIN no coinciden", errPinWrong:"PIN incorrecto", errAuth:"No se pudo verificar la identidad. Inténtalo de nuevo.", errImport:"Archivo .ADFK no válido",
+    errAuthFallback:"No se detectó biometría utilizable en este dispositivo. Usa un PIN.",
+    errAuthNoFallback:"No se pudo verificar con biometría en este dispositivo. Importa tu identidad (.ADFK) para configurar un PIN aquí.",
+    usePin:"Usar PIN en su lugar", useBio:"Usar huella / rostro",
     idCreated:"Identidad creada", idImported:"Identidad importada", adfkSaved:"Respaldo .ADFK descargado", locked:"App bloqueada",
     exportId:"Exportar identidad (.ADFK)", lockNow:"Bloquear ahora",
     vPath:"Ruta de guardado", vChooseFolder:"Elegir carpeta…", vFolderNone:"Sin carpeta — se descargará .ZIP", vFolderUnsup:"Este navegador no permite elegir carpeta; se usará .ZIP",
@@ -470,7 +542,12 @@
     cNeedCreds:"Falta la credencial del servicio", cUploading:"Subiendo a la nube…", cUploaded:"Subido a la nube", cUploadFail:"Falló la subida a la nube", cConnFail:"No se pudo conectar",
     zipSaved:"Guardado en .ZIP", folderSaved:"Guardado en carpeta",
     sttUnsup:"Reconocimiento de voz no soportado en este navegador", sttHttps:"El reconocimiento de voz requiere HTTPS (no funciona abriendo el archivo directo)",
-    sttDenied:"Permiso de micrófono denegado", sttListening:"escuchando…", sttError:"Error de reconocimiento", sttRetry:"reconectando…"
+    sttDenied:"Permiso de micrófono denegado", sttListening:"escuchando…", sttError:"Error de reconocimiento", sttRetry:"reconectando…",
+    sttMicBusy:"Micrófono ocupado por otra captura — desactiva 'Exportar pista de audio' o cierra otras apps que usen el micro",
+    sttMicBusyOwnRec:"Este dispositivo no permite detectar frases mientras grabas con audio activado. Desactiva 'Exportar pista de audio' en Opciones de video si priorizas la detección.",
+    sttLocalLoading:"cargando modelo local (primera vez)…", sttListeningLocal:"escuchando (modelo local, sin conexión)…",
+    sttLocalFail:"No se pudo cargar el modelo de transcripción local en este dispositivo/navegador.",
+    sttNetDown:"Sin conexión con el servicio de voz — el reconocimiento necesita internet"
   });
   Object.assign(DICT.en, {
     lockCreateTitle:"Create your identity", lockCreateSub:"A unique key for this device and an .ADFK backup file will be generated.",
@@ -479,6 +556,9 @@
     noteBio:"Your device fingerprint, face or PIN will be used.", notePin:"This browser has no biometrics. Set a 4+ digit PIN.",
     phPin:"PIN", phPinNew:"New PIN (4+ digits)", phPinRepeat:"Repeat PIN", phPinEnter:"Enter your PIN",
     errPinShort:"PIN must be at least 4 digits", errPinMismatch:"PINs don't match", errPinWrong:"Wrong PIN", errAuth:"Could not verify identity. Try again.", errImport:"Invalid .ADFK file",
+    errAuthFallback:"No usable biometrics detected on this device. Use a PIN instead.",
+    errAuthNoFallback:"Couldn't verify with biometrics on this device. Import your identity (.ADFK) to set up a PIN here.",
+    usePin:"Use PIN instead", useBio:"Use fingerprint / face",
     idCreated:"Identity created", idImported:"Identity imported", adfkSaved:".ADFK backup downloaded", locked:"App locked",
     exportId:"Export identity (.ADFK)", lockNow:"Lock now",
     vPath:"Save location", vChooseFolder:"Choose folder…", vFolderNone:"No folder — a .ZIP will download", vFolderUnsup:"This browser can't pick a folder; a .ZIP will be used",
@@ -488,7 +568,12 @@
     cNeedCreds:"Service credential missing", cUploading:"Uploading to cloud…", cUploaded:"Uploaded to cloud", cUploadFail:"Cloud upload failed", cConnFail:"Could not connect",
     zipSaved:"Saved as .ZIP", folderSaved:"Saved to folder",
     sttUnsup:"Speech recognition not supported in this browser", sttHttps:"Speech recognition requires HTTPS (won't work opening the raw file)",
-    sttDenied:"Microphone permission denied", sttListening:"listening…", sttError:"Recognition error", sttRetry:"reconnecting…"
+    sttDenied:"Microphone permission denied", sttListening:"listening…", sttError:"Recognition error", sttRetry:"reconnecting…",
+    sttMicBusy:"Mic captured by another recording — turn off 'Export audio track' or close other apps using the mic",
+    sttMicBusyOwnRec:"This device can't detect phrases while recording with audio enabled. Turn off 'Export audio track' in Video Options if detection is your priority.",
+    sttLocalLoading:"loading local model (first time)…", sttListeningLocal:"listening (local offline model)…",
+    sttLocalFail:"Couldn't load the local transcription model on this device/browser.",
+    sttNetDown:"Can't reach the speech service — recognition needs internet"
   });
 
   const SIM_PHRASES = {
@@ -496,7 +581,7 @@
     en:['Someone is here','I am not alone','Leave this place','I see you','Help me','So cold','Who are you?','Behind you','Do not be afraid','They are listening','Leave now','I can see you']
   };
 
-  const DEFAULTS = { audioQuality:'16', channel:'stereo', storage:'device', exportAudio:true, exportSubs:true };
+  const DEFAULTS = { audioQuality:'16', channel:'stereo', storage:'device', exportAudio:false, exportSubs:true };
 
   const state = {
     screen:'main', lang:'es',
@@ -510,6 +595,7 @@
 
   // runtime handles
   let stream=null, audioCtx=null, analyser=null, freq=null;
+  let camFacing='user'; // 'user' = front, 'environment' = back
   let recognition=null, recorder=null, chunks=[], recStream=null;
   let timerInt=null, sessionActive=false, toastT=null, simT=null;
   const memoryClips=[];
@@ -525,38 +611,220 @@
     clearTimeout(toastT); toastT=setTimeout(()=>{state.toast='';t.classList.remove('on');},2400);
   }
 
+  let camLoadingCount=0; // reference-counted so overlapping calls don't hide it too early
+  function showCamLoading(msg){
+    camLoadingCount++;
+    $('camLoadingText').textContent=msg||S().camLoadingDefault;
+    $('camLoading').classList.add('on');
+  }
+  function hideCamLoading(){
+    camLoadingCount=Math.max(0,camLoadingCount-1);
+    if(camLoadingCount===0) $('camLoading').classList.remove('on');
+  }
+
   /* ---------- camera / audio ---------- */
   function attachStream(){
     const v=$('video');
+    let facing=camFacing;
+    try{
+      const vt=stream&&stream.getVideoTracks()[0];
+      const settings=vt&&vt.getSettings&&vt.getSettings();
+      if(settings&&settings.facingMode) facing=settings.facingMode;
+    }catch(e){}
+    v.classList.toggle('back-cam', facing==='environment');
     if(stream && v.srcObject!==stream){ v.srcObject=stream; v.play&&v.play().catch(()=>{}); }
   }
   function setupAnalyser(st){
     try{
+      if(!st.getAudioTracks().length) return;
       const AC=window.AudioContext||window.webkitAudioContext;
-      audioCtx=new AC();
+      if(!audioCtx) audioCtx=new AC();
+      if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
       const src=audioCtx.createMediaStreamSource(st);
       analyser=audioCtx.createAnalyser(); analyser.fftSize=128; analyser.smoothingTimeConstant=0.75;
       src.connect(analyser); freq=new Uint8Array(analyser.frequencyBinCount);
     }catch(e){}
   }
-  async function ensureCamera(){
+  // Stop only the audio tracks (keep video preview) so the mic is free for speech recognition.
+  // Never do it while a recording that exports audio is running — it would silence/corrupt the video.
+  // Checked two ways on purpose: the state flag AND the recorder's own live state, so a future
+  // ordering mistake in one can't silently reintroduce "recording gets its audio track killed mid-capture".
+  function releaseMic(){
+    if(!stream) return;
+    const recorderIsRecording = !!(recorder && recorder.state==='recording');
+    if((state.recording || recorderIsRecording) && state.settings.exportAudio) return;
+    const at=stream.getAudioTracks();
+    if(!at.length) return;
+    at.forEach(t=>{ try{ t.stop(); }catch(e){} try{ stream.removeTrack(t); }catch(e){} });
+    analyser=null; freq=null;
+  }
+  // wantAudio=false → video-only, leaving the mic FREE for speech recognition.
+  // wantAudio=true  → include the mic track (needed when recording with audio export).
+  // forceNew=true   → always re-acquire (used when flipping front/back camera).
+  async function ensureCamera(wantAudio, forceNew){
     if(state.sim) return true;
-    if(stream) return true;
+    const needAudio=!!wantAudio;
+    if(stream && !forceNew){
+      const hasAudio=stream.getAudioTracks().length>0;
+      if(needAudio && hasAudio) return true;
+      if(!needAudio){
+        // CRITICAL: if a previous recording left the mic captured, release it now,
+        // otherwise speech recognition gets no audio and loops "reconnecting".
+        if(hasAudio) releaseMic();
+        return true;
+      }
+      // We need audio now but the current stream is video-only: re-acquire.
+      try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+      stream=null; analyser=null; freq=null;
+    } else if(stream && forceNew){
+      try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+      stream=null; analyser=null; freq=null;
+    }
     try{
-      stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:'user'},audio:true});
-      setupAnalyser(stream);
+      showCamLoading(S().camLoadingDefault);
+      stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:{ideal:camFacing}},audio:needAudio});
+      if(needAudio) setupAnalyser(stream);
       state.cameraReady=true; state.camError='';
       attachStream(); sync();
       return true;
     }catch(e){
+      if(needAudio){ // audio may have been blocked; fall back to video-only so preview still works
+        try{ stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:{ideal:camFacing}},audio:false});
+          state.cameraReady=true; state.camError=''; attachStream(); sync(); return true; }catch(_){}
+      }
       state.camError=S().camFail; sync();
       return false;
+    }finally{
+      hideCamLoading();
     }
+  }
+  async function flipCamera(){
+    if(state.sim){ showToast(S().flipSim); return; }
+    if(state.recording){ showToast(S().flipWhileRecording); return; }
+    const hadAudio = stream ? stream.getAudioTracks().length>0 : false;
+    camFacing = camFacing==='user' ? 'environment' : 'user';
+    const ok = await ensureCamera(hadAudio, true);
+    if(!ok){ camFacing = camFacing==='user' ? 'environment' : 'user'; showToast(S().camFail); }
   }
   function stopStream(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} }
 
   /* ---------- speech recognition ---------- */
-  let recognizing=false, sttFatal=false;
+  let recognizing=false, sttFatal=false, sttFailStreak=0, lastSttErr='';
+
+  /* ================= Local offline ASR tap (Whisper) — used only when recording
+     WITH audio export, where the browser's mic-based recognition can't get the
+     microphone because MediaRecorder already holds it exclusively on many devices.
+     This taps the SAME shared track via Web Audio (non-exclusive, doesn't compete
+     with the recording) and runs speech-to-text locally, chunk by chunk. ================= */
+  const LOCAL_ASR_CHUNK_SEC = 5;
+  let localAsrCtx=null, localAsrSource=null, localAsrProcessor=null, localAsrSilentGain=null;
+  let localAsrBuffers=[], localAsrSampleCount=0, localAsrRate=48000, localAsrActive=false, localAsrBusy=false;
+
+  function resampleTo16k(float32, fromRate){
+    if(fromRate===16000) return float32;
+    const ratio=fromRate/16000;
+    const outLen=Math.floor(float32.length/ratio);
+    const out=new Float32Array(outLen);
+    for(let i=0;i<outLen;i++){
+      const srcPos=i*ratio, i0=Math.floor(srcPos), i1=Math.min(i0+1,float32.length-1), frac=srcPos-i0;
+      out[i]=float32[i0]*(1-frac)+float32[i1]*frac;
+    }
+    return out;
+  }
+  function concatFloat32(chunks, totalLen){
+    const out=new Float32Array(totalLen); let off=0;
+    for(const c of chunks){ out.set(c,off); off+=c.length; }
+    return out;
+  }
+  async function processLocalAsrChunk(float32, rate){
+    if(localAsrBusy) return; // drop overlapping work rather than pile up requests on a slow device
+    localAsrBusy=true;
+    try{
+      const resampled=resampleTo16k(float32, rate);
+      const lang = state.lang==='es' ? 'spanish' : 'english';
+      const text = await window.__localASR.transcribe(resampled, lang);
+      const t=(text||'').trim();
+      // Whisper sometimes emits stock filler on pure silence/noise chunks — ignore tiny/empty results.
+      if(t && t.length>1) addPhrase(t);
+    }catch(e){ /* one bad chunk shouldn't kill the session */ }
+    finally{ localAsrBusy=false; }
+  }
+  async function startLocalAsrTap(track){
+    stopLocalAsrTap();
+    try{
+      setStt(S().sttLocalLoading,false);
+      await window.__localASR.load(); // triggers the (one-time, cached) model download
+      const AC=window.AudioContext||window.webkitAudioContext;
+      localAsrCtx=new AC();
+      localAsrRate=localAsrCtx.sampleRate||48000;
+      const miniStream=new MediaStream([track]);
+      localAsrSource=localAsrCtx.createMediaStreamSource(miniStream);
+      localAsrProcessor=localAsrCtx.createScriptProcessor(4096,1,1);
+      localAsrSilentGain=localAsrCtx.createGain(); localAsrSilentGain.gain.value=0; // tap only, no echo
+      localAsrBuffers=[]; localAsrSampleCount=0; localAsrActive=true;
+      const chunkTarget=LOCAL_ASR_CHUNK_SEC*localAsrRate;
+      localAsrProcessor.onaudioprocess=e=>{
+        if(!localAsrActive) return;
+        localAsrBuffers.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+        localAsrSampleCount+=e.inputBuffer.getChannelData(0).length;
+        if(localAsrSampleCount>=chunkTarget){
+          const combined=concatFloat32(localAsrBuffers, localAsrSampleCount);
+          localAsrBuffers=[]; localAsrSampleCount=0;
+          processLocalAsrChunk(combined, localAsrRate);
+        }
+      };
+      localAsrSource.connect(localAsrProcessor);
+      localAsrProcessor.connect(localAsrSilentGain);
+      localAsrSilentGain.connect(localAsrCtx.destination);
+      setStt(S().sttListeningLocal,false);
+    }catch(e){
+      setStt(S().sttLocalFail,true); showToast(S().sttLocalFail);
+      stopLocalAsrTap();
+    }
+  }
+  function stopLocalAsrTap(){
+    localAsrActive=false;
+    // Flush whatever's left in the buffer as a final (shorter) chunk instead of discarding it.
+    if(localAsrSampleCount>0 && window.__localASR){
+      const combined=concatFloat32(localAsrBuffers, localAsrSampleCount);
+      localAsrBuffers=[]; localAsrSampleCount=0;
+      processLocalAsrChunk(combined, localAsrRate);
+    }
+    try{ localAsrProcessor && localAsrProcessor.disconnect(); }catch(e){}
+    try{ localAsrSource && localAsrSource.disconnect(); }catch(e){}
+    try{ localAsrSilentGain && localAsrSilentGain.disconnect(); }catch(e){}
+    try{ localAsrCtx && localAsrCtx.close(); }catch(e){}
+    localAsrCtx=null; localAsrSource=null; localAsrProcessor=null; localAsrSilentGain=null;
+  }
+  // Detection buffer: Chrome/webkit often finalizes speech mid-phrase after a short
+  // pause (e.g. "buenas" then "buenas noches" as two separate finals for one utterance).
+  // Instead of logging every final immediately, hold it briefly to catch a continuation.
+  // Raised from 1100→1700ms and, below, extended further on ANY live activity (even
+  // interim/non-final results) — slow, deliberately-paced speech has longer gaps
+  // between words than quick speech, and was getting split into separate fragments
+  // instead of merging into the full phrase.
+  const FINAL_COMMIT_MS = 1700;
+  let pendingFinalText='', pendingFinalTimer=null;
+  function mergeFragments(prev, next){
+    const p=prev.trim(), n=next.trim();
+    if(!p) return n;
+    if(!n) return p;
+    const pl=p.toLowerCase(), nl=n.toLowerCase();
+    if(nl.startsWith(pl)) return n;   // next continues/extends prev ("buenas" -> "buenas noches")
+    if(pl.startsWith(nl)) return p;   // next is already contained in prev
+    return p+' '+n;                  // two distinct fragments within the buffer window — join them
+  }
+  function flushPendingFinal(){
+    if(pendingFinalTimer){ clearTimeout(pendingFinalTimer); pendingFinalTimer=null; }
+    const t=pendingFinalText; pendingFinalText='';
+    if(t) addPhrase(t);
+  }
+  function scheduleFinalCommit(text){
+    text=(text||'').trim(); if(!text) return;
+    pendingFinalText = mergeFragments(pendingFinalText, text);
+    if(pendingFinalTimer) clearTimeout(pendingFinalTimer);
+    pendingFinalTimer=setTimeout(flushPendingFinal, FINAL_COMMIT_MS);
+  }
   function setStt(text, isErr){
     const box=$('sttStatus');
     if(!text){ box.classList.remove('on'); return; }
@@ -569,26 +837,65 @@
     if(!SR) return null;
     const r=new SR(); r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
     r.lang=state.lang==='es'?'es-ES':'en-US';
-    r.onstart=()=>{ recognizing=true; setStt(S().sttListening,false); };
+    let processedFinalIndex=-1; // guards against Chrome redelivering an already-final result
+    r.onstart=()=>{ recognizing=true; processedFinalIndex=-1; flushPendingFinal(); setStt(S().sttListening,false); };
+    r.onaudiostart=()=>{ sttFailStreak=0; setStt(S().sttListening,false); };
     r.onresult=e=>{
+      sttFailStreak=0;
       let interim='';
       for(let i=e.resultIndex;i<e.results.length;i++){
         const res=e.results[i];
-        if(res.isFinal) addPhrase(res[0].transcript); else interim+=res[0].transcript;
+        if(res.isFinal){
+          if(i>processedFinalIndex){ processedFinalIndex=i; scheduleFinalCommit(res[0].transcript); }
+          // else: same final result re-delivered by the browser — skip, already logged.
+        } else interim+=res[0].transcript;
       }
       state.interim=interim.trim(); syncPhrases();
+      // Live activity while a phrase is pending: the person is still speaking
+      // (e.g. slowly, with pauses between words) — extend the window instead of
+      // letting it flush mid-phrase just because the next word hasn't finalized yet.
+      if(interim.trim() && pendingFinalTimer){
+        clearTimeout(pendingFinalTimer);
+        pendingFinalTimer=setTimeout(flushPendingFinal, FINAL_COMMIT_MS);
+      }
     };
     r.onerror=e=>{
-      const err=e&&e.error;
+      const err=(e&&e.error)||'';
+      lastSttErr=err;
       if(err==='not-allowed'||err==='service-not-allowed'){ sttFatal=true; setStt(S().sttDenied,true); }
-      else if(err==='no-speech'||err==='aborted'){ /* transient: onend will restart */ }
-      else if(err==='network'){ setStt(S().sttRetry,true); }
-      else { setStt(S().sttError,true); }
+      else if(err==='audio-capture'){
+        sttFailStreak++;
+        // If OUR OWN recording is holding the mic for the audio track, say so specifically —
+        // it's a different, more actionable message than "some other app is using the mic".
+        const ownRecordingHoldsMic = state.recording && state.settings.exportAudio;
+        setStt(ownRecordingHoldsMic ? S().sttMicBusyOwnRec : S().sttMicBusy, true);
+      }
+      else if(err==='network'){ sttFailStreak++; setStt(S().sttRetry,true); }
+      else if(err==='no-speech'){ /* normal silence timeout: NOT a failure */ lastSttErr=''; }
+      else if(err==='aborted'){ lastSttErr=''; }
+      else { sttFailStreak++; setStt(S().sttError,true); }
     };
     r.onend=()=>{
       recognizing=false;
-      if(state.listening && !sttFatal){ setStt(S().sttRetry,false); setTimeout(()=>{ if(state.listening){ try{ r.start(); }catch(_){} } },350); }
-      else if(!state.listening){ setStt('',false); }
+      if(!state.listening){ setStt('',false); return; }
+      if(sttFatal) return;
+      // Persistent failure: surface a concrete diagnosis instead of looping forever.
+      if(sttFailStreak>=4){
+        const ownRecordingHoldsMic = state.recording && state.settings.exportAudio;
+        const msg = lastSttErr==='network' ? S().sttNetDown : (ownRecordingHoldsMic ? S().sttMicBusyOwnRec : S().sttMicBusy);
+        setStt(msg,true); showToast(msg);
+        sttFailStreak=0;
+      }
+      // Silence timeouts restart immediately and quietly; real errors back off.
+      const wasSilence=!lastSttErr;
+      const delay=wasSilence ? 120 : Math.min(300*Math.pow(2,sttFailStreak), 3000);
+      if(!wasSilence) setStt(S().sttRetry,false);
+      setTimeout(()=>{
+        if(!state.listening || sttFatal) return;
+        releaseMic(); // make sure nothing re-captured the mic while we were down
+        lastSttErr='';
+        try{ r.start(); }catch(_){}
+      }, delay);
     };
     return r;
   }
@@ -596,10 +903,19 @@
   async function startListen(){
     beginSession();
     if(state.sim){ state.listening=true; setStt(S().sttListening,false); startSimPhrases(); syncMain(); return; }
+    // Recording WITH the audio track exported: the mic is exclusively held for the
+    // video's audio on many devices, so the browser's mic-based recognition can't
+    // run. Tap the SAME shared track (non-exclusive) and transcribe locally instead.
+    if(state.recording && state.settings.exportAudio && recStream && recStream.getAudioTracks().length){
+      state.listening=true; syncMain();
+      await startLocalAsrTap(recStream.getAudioTracks()[0]);
+      return;
+    }
     if(!window.isSecureContext){ showToast(S().sttHttps); setStt(S().sttHttps,true); }
     if(!sttSupported()){ showToast(S().sttUnsup); setStt(S().sttUnsup,true); }
-    await ensureCamera();
-    sttFatal=false;
+    await ensureCamera(false); // video only → mic stays free for recognition
+    releaseMic(); // belt & suspenders: never start recognition with the mic captured
+    sttFatal=false; sttFailStreak=0; lastSttErr='';
     if(!recognition) recognition=initRecognition();
     if(!recognition){ setStt(S().sttUnsup,true); return; }
     recognition.lang=state.lang==='es'?'es-ES':'en-US';
@@ -610,11 +926,21 @@
   }
   function stopListen(){
     stopSimPhrases();
+    stopLocalAsrTap();
+    flushPendingFinal(); // don't lose a phrase still waiting to see if it continues
     state.listening=false; setStt('',false); syncMain(); maybeEndSession();
     if(recognition){ try{ recognition.stop(); }catch(e){} }
   }
+  let lastAddedText='', lastAddedAt=0;
   function addPhrase(t){
     t=(t||'').trim(); if(!t) return;
+    // Safety net: some browsers occasionally redeliver the same final result
+    // right after a recognition restart, which resets our index guard.
+    // Ignore an exact repeat of the last phrase if it lands within 1.5s of it.
+    const now=Date.now();
+    const norm=t.toLowerCase();
+    if(norm===lastAddedText && (now-lastAddedAt)<1500) return;
+    lastAddedText=norm; lastAddedAt=now;
     state.phrases.unshift({
       id:Date.now()+Math.random(), text:t, ts:Date.now(),
       vts:fmt(state.elapsed), vname:state.sessionName||('VID_'+String(state.sessionCount||1).padStart(4,'0')),
@@ -657,7 +983,9 @@
   async function toggleRecord(){
     if(state.recording){ stopRecording(); return; }
     if(!state.sim){
-      const ok=await ensureCamera(); if(!ok) return;
+      // Only grab the mic for the recording if the user wants the audio track.
+      // Otherwise keep it video-only so speech recognition keeps the mic and detection works.
+      const ok=await ensureCamera(!!state.settings.exportAudio); if(!ok) return;
       try{
         chunks=[]; recStream=buildRecStream();
         const opts={};
@@ -667,19 +995,29 @@
         recorder=new MediaRecorder(recStream,opts);
         recorder.ondataavailable=e=>{ if(e.data && e.data.size) chunks.push(e.data); };
         recorder.onstop=finalizeRecording;
+        // Mark recording BEFORE anything else runs — startListen() below calls
+        // releaseMic(), whose guard checks state.recording to avoid killing the
+        // audio track of an in-progress recording. If that flag were still false
+        // here, the guard would fail and stopping the audio track mid-recording
+        // is exactly what was corrupting the exported WebM.
+        state.recording=true;
         recorder.start();
-      }catch(e){}
+      }catch(e){ state.recording=false; }
+    } else {
+      state.recording=true;
     }
     startListen();
-    state.recording=true; syncMain();
+    syncMain();
   }
   function stopRecording(){
     const sess=state.sessionName;
+    state.recording=false; // set first so finalizeRecording (onstop) is allowed to release the mic
     try{ if(recorder && recorder.state!=='inactive') recorder.stop(); else finalizeRecording(sess); }catch(e){ finalizeRecording(sess); }
     stopListen();
-    state.recording=false; syncMain(); maybeEndSession();
+    syncMain(); maybeEndSession();
   }
   async function finalizeRecording(){
+    releaseMic(); // free the mic as soon as the recorder is done, so detection keeps working
     const sess=state.sessionName||('VID_'+String(state.sessionCount||1).padStart(4,'0'));
     const g=state.settings;
     const files=[];
@@ -773,6 +1111,12 @@
   function setSetting(k,v){
     if(v==='true') v=true; else if(v==='false') v=false;
     state.settings[k]=v; syncSubScreens(); persist();
+    // Warm the local ASR model in the background the moment this is turned on, so it's
+    // more likely already cached/ready by the time the person actually presses record —
+    // this never touches the main thread, it just kicks off the worker's download early.
+    if(k==='exportAudio' && v===true && window.__localASR){
+      window.__localASR.load().catch(()=>{});
+    }
   }
 
   /* ---------- render / sync ---------- */
@@ -798,6 +1142,7 @@
     $('videoTitle').textContent=s.videoTitle; $('vStorage').textContent=s.vStorage; $('vTrack').textContent=s.vTrack; $('vSubs').textContent=s.vSubs;
     $('vDevice').textContent=s.vDevice; $('vMemory').textContent=s.vMemory; $('vCloud').textContent=s.vCloud;
     $('vNoTrack').textContent=s.vNoTrack; $('vYesTrack').textContent=s.vYesTrack;
+    $('vTrackNote').textContent=s.vTrackNote;
     $('vNoSubs').textContent=s.vNoSubs; $('vYesSubs').textContent=s.vYesSubs;
     $('vPath').textContent=s.vPath;
     $('cloudSel').textContent=s.cloudSel; $('cNone').textContent=s.cNone; $('cDrive').textContent=s.cDrive; $('cDropbox').textContent=s.cDropbox;
@@ -834,6 +1179,10 @@
     $('recInner').className=state.recording?'sq':'ci';
     // mic button
     $('btnMic').classList.toggle('on',state.listening);
+    // flip camera: hidden in sim (nothing to flip), dimmed while recording (disallowed, not hidden)
+    const flip=$('btnFlipCam');
+    flip.style.display=state.sim?'none':'flex';
+    flip.style.opacity=state.recording?'.45':'1';
   }
   function syncTimer(){ $('timeStr').textContent=fmt(state.elapsed); }
   function syncPhrases(){
@@ -916,7 +1265,8 @@
   $('menuClose').onclick=$('menuScrim').onclick=()=>{state.menuOpen=false;sync();};
   $('btnLangTop').onclick=switchLang;
   $('btnLangMenu').onclick=switchLang;
-  $('camPrompt').onclick=ensureCamera;
+  $('camPrompt').onclick=()=>ensureCamera(false);
+  $('btnFlipCam').onclick=flipCamera;
   $('btnRec').onclick=toggleRecord;
   $('btnMic').onclick=()=>{ state.listening?stopListen():startListen(); };
   $('btnPanic').onclick=()=>{state.menuOpen=false;state.panicOpen=true;sync();};
@@ -931,6 +1281,7 @@
 
   // lock screen
   $('btnPrimaryAuth').onclick=primaryAuth;
+  $('btnSwitchMethod').onclick=toggleMethod;
   $('btnImportId').onclick=()=>$('adfkFile').click();
   $('adfkFile').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) importAdfkFile(f); e.target.value=''; };
   $('pinInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ if($('pinInput2').classList.contains('hide')) primaryAuth(); else $('pinInput2').focus(); } });
@@ -971,7 +1322,19 @@
   /* ================= identity + auth (WebAuthn / PIN) ================= */
   let identity=null; // {userId, key, createdAt, cred, pinHash, pinSalt}
   const auth={
-    bioAvailable(){ return !!(window.PublicKeyCredential && window.isSecureContext); },
+    _cached:null,
+    // Real check: the API existing is NOT enough — many desktops expose PublicKeyCredential
+    // with no fingerprint/face sensor configured. This is what actually caused setup/import
+    // to dead-end on desktop: bioAvailable() said "yes" and hid the PIN fields entirely.
+    async bioAvailable(){
+      if(this._cached!==null) return this._cached;
+      try{
+        if(!(window.PublicKeyCredential && window.isSecureContext)){ this._cached=false; return false; }
+        if(typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable!=='function'){ this._cached=false; return false; }
+        this._cached=await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      }catch(e){ this._cached=false; }
+      return this._cached;
+    },
     async register(userId){
       const challenge=crypto.getRandomValues(new Uint8Array(32));
       const cred=await navigator.credentials.create({publicKey:{
@@ -1091,44 +1454,67 @@
 
   /* ================= lock screen / auth flow ================= */
   let authMode='unlock', setupIdentity=null;
+  let bioKnown=false;           // becomes true once the real async check resolves
+  let manualPinOverride=false;  // user explicitly chose "use PIN instead"
   const showEl=el=>el.classList.remove('hide'), hideEl=el=>el.classList.add('hide');
   function lockErr(msg){ const e=$('lockErr'); if(msg){e.textContent=msg;e.classList.add('on');}else e.classList.remove('on'); }
+  function useBioNow(){ return auth._cached===true && !manualPinOverride; }
   function renderLock(){
     const s=S(); lockErr('');
-    const p1=$('pinInput'), p2=$('pinInput2'), note=$('lockNote'), lid=$('lockId');
+    const p1=$('pinInput'), p2=$('pinInput2'), note=$('lockNote'), lid=$('lockId'), sw=$('btnSwitchMethod');
     p1.value=''; p2.value='';
     const unlock = identity && authMode!=='register';
     if(unlock){
       $('lockTitle').textContent=s.lockUnlockTitle;
       $('lockSub').textContent=s.lockUnlockSub;
       lid.textContent=identity.userId; showEl(lid);
-      if(identity.cred){ hideEl(p1); hideEl(p2); hideEl(note); $('btnPrimaryAuth').textContent=s.btnUnlockBio; }
-      else { showEl(p1); p1.placeholder=s.phPinEnter; hideEl(p2); hideEl(note); $('btnPrimaryAuth').textContent=s.btnEnter; }
+      if(identity.pinHash && manualPinOverride || (identity.pinHash && !identity.cred)){
+        showEl(p1); p1.placeholder=s.phPinEnter; hideEl(p2); hideEl(note); $('btnPrimaryAuth').textContent=s.btnEnter;
+      } else {
+        hideEl(p1); hideEl(p2); hideEl(note); $('btnPrimaryAuth').textContent=s.btnUnlockBio;
+      }
+      sw.style.display='none'; // recovery on this identity is via "Import .ADFK" below, not a method switch
     } else {
       $('lockTitle').textContent=s.lockCreateTitle;
       $('lockSub').textContent = (setupIdentity&&setupIdentity.imported) ? s.idImported : s.lockCreateSub;
       hideEl(lid);
-      if(auth.bioAvailable()){ hideEl(p1); hideEl(p2); showEl(note); note.textContent=s.noteBio; }
+      const bio = useBioNow();
+      if(bio){ hideEl(p1); hideEl(p2); showEl(note); note.textContent=s.noteBio; }
       else { showEl(p1); p1.placeholder=s.phPinNew; showEl(p2); p2.placeholder=s.phPinRepeat; showEl(note); note.textContent=s.notePin; }
       $('btnPrimaryAuth').textContent=s.btnCreate;
+      // Manual escape hatch: always let the user switch method themselves,
+      // regardless of what device detection thinks — this is what guarantees
+      // setup never dead-ends on a desktop without a working sensor.
+      if(auth._cached===true){ sw.style.display='block'; sw.textContent = bio ? s.usePin : s.useBio; }
+      else { sw.style.display='none'; }
     }
     $('btnImportId').textContent=s.btnImport;
   }
-  function showLock(){ state.locked=true; $('lockScreen').classList.add('on'); renderLock(); }
+  function refreshBioThenRender(){
+    auth.bioAvailable().then(()=>{ bioKnown=true; renderLock(); });
+  }
+  function showLock(){ state.locked=true; $('lockScreen').classList.add('on'); renderLock(); refreshBioThenRender(); }
   function enterApp(){ state.locked=false; $('lockScreen').classList.remove('on'); sync(); }
   function startRegister(imported){
-    authMode='register';
+    authMode='register'; manualPinOverride=false;
     setupIdentity = imported || { userId:'USR-'+randId().slice(0,8).toUpperCase(), key:randId()+randId(), createdAt:Date.now(), imported:false };
     renderLock();
   }
+  function toggleMethod(){ manualPinOverride=!manualPinOverride; lockErr(''); renderLock(); }
   async function doSetup(){
     const s=S();
     if(!setupIdentity) startRegister(null);
     let rec;
-    if(auth.bioAvailable()){
-      try{ const cred=await auth.register(setupIdentity.userId);
+    if(useBioNow()){
+      try{
+        const cred=await auth.register(setupIdentity.userId);
         rec={userId:setupIdentity.userId,key:setupIdentity.key,createdAt:setupIdentity.createdAt,cred,pinHash:null,pinSalt:null};
-      }catch(e){ lockErr(s.errAuth); return; }
+      }catch(e){
+        // Graceful fallback — never dead-end: drop to PIN setup right away instead of
+        // leaving the user stuck with only an error and a biometric button that won't work.
+        auth._cached=false; manualPinOverride=true;
+        lockErr(s.errAuthFallback); renderLock(); return;
+      }
     } else {
       const a=$('pinInput').value.trim(), b=$('pinInput2').value.trim();
       if(a.length<4){ lockErr(s.errPinShort); return; }
@@ -1139,15 +1525,18 @@
     identity=rec; await idb.set('identity',identity);
     downloadAdfk(identity);
     showToast(setupIdentity.imported? s.idImported : s.idCreated);
-    setupIdentity=null; authMode='unlock';
+    setupIdentity=null; authMode='unlock'; manualPinOverride=false;
     enterApp();
     setTimeout(()=>showToast(S().adfkSaved),1200);
   }
   async function doUnlock(){
     const s=S();
-    if(identity.cred){
+    const wantBio = identity.cred && !(identity.pinHash && manualPinOverride);
+    if(wantBio){
       try{ await auth.assert(identity.cred); enterApp(); }
-      catch(e){ lockErr(s.errAuth); }
+      catch(e){
+        lockErr(identity.pinHash ? s.errAuth : s.errAuthNoFallback);
+      }
     } else if(identity.pinHash){
       const a=$('pinInput').value.trim();
       const h=await sha256hex(identity.pinSalt+a);
@@ -1164,7 +1553,8 @@
   function importAdfkFile(file){
     const r=new FileReader();
     r.onload=()=>{ try{
-      const d=JSON.parse(r.result);
+      const raw=(r.result||'').toString().trim();
+      const d=JSON.parse(raw);
       if(d && d.format==='ADFK' && d.userId && d.key){
         startRegister({userId:d.userId,key:d.key,createdAt:d.createdAt||Date.now(),imported:true});
       } else lockErr(S().errImport);
@@ -1254,20 +1644,50 @@
       const sc=Math.min(1,(window.innerWidth-pad*2)/390,(window.innerHeight-pad*2)/844);
       stage.style.transform='scale('+sc+')';
     }
+    stage.classList.add('ready'); // reveal only once correctly scaled — no more flash of native size
   }
   window.addEventListener('resize',fit);
   window.addEventListener('orientationchange',fit);
   if(window.matchMedia){ try{ window.matchMedia('(display-mode: standalone)').addEventListener('change',fit); }catch(e){} }
+  // Extra safety net: track the phone/desktop breakpoint via its own media query too,
+  // independent of resize/orientationchange firing correctly on every browser.
+  if(window.matchMedia){ try{ window.matchMedia('(max-width: 480px)').addEventListener('change',fit); }catch(e){} }
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(fit).catch(()=>{}); }
 
   /* ---------- service worker ---------- */
   function registerSW(){
     if(!('serviceWorker' in navigator)) return;
     if(location.protocol!=='http:' && location.protocol!=='https:') return; // needs a server, not file://
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
+    // controllerchange fires on the very FIRST install too (since our SW calls
+    // skipWaiting+clients.claim unconditionally), not only on genuine updates.
+    // Only auto-reload when a controller already existed before — i.e. a real
+    // update replacing a previous version — otherwise every fresh install/cache
+    // clear triggers an unwanted reload right as the page is settling its layout.
+    const hadControllerBefore = !!navigator.serviceWorker.controller;
+    let reloadedForUpdate=false;
+    navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+      if(!hadControllerBefore) return; // first install taking control — not an update
+      if(reloadedForUpdate) return; reloadedForUpdate=true;
+      try{ if(sessionStorage.getItem('fantasma_sw_reloaded')==='1') return; sessionStorage.setItem('fantasma_sw_reloaded','1'); }catch(e){}
+      // A short buffer avoids reloading mid-paint/mid-interaction: wait a beat,
+      // and if the person is actively typing (e.g. a PIN), wait for them to finish
+      // instead of yanking the page out from under them.
+      const doReload=()=>{
+        const el=document.activeElement;
+        const typing = el && (el.id==='pinInput' || el.id==='pinInput2' || el.id==='cloudCredInput');
+        if(typing){ setTimeout(doReload, 800); return; }
+        location.reload();
+      };
+      setTimeout(doReload, 600);
+    });
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      reg.update().catch(()=>{});
+    }).catch(()=>{});
   }
 
   /* ---------- boot ---------- */
   async function boot(){
+    fit(); // scale immediately, before any awaits, so the stage reveals as soon as possible
     loadPersisted();
     try{ await loadCloud(); }catch(e){}
     parseDropboxRedirect();
@@ -1279,7 +1699,7 @@
     sync(); fit();
     showLock();
     registerSW();
-    requestAnimationFrame(loop);
+    requestAnimationFrame(()=>{ fit(); loop(); }); // re-check sizing once a frame has actually painted
   }
   boot();
 })();

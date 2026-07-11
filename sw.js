@@ -1,5 +1,5 @@
 /* Investigación Fantasma — service worker */
-const VERSION = 'fantasma-v1';
+const VERSION = 'fantasma-v4';
 const APP_SHELL = [
   './',
   './index.html',
@@ -7,7 +7,8 @@ const APP_SHELL = [
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './asr-worker.js'
 ];
 
 self.addEventListener('install', (e) => {
@@ -47,7 +48,23 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Same-origin: cache-first, fall back to network, then to app shell for navigations.
+  // Same-origin. Navigations and index.html: NETWORK-FIRST, so a new deploy is
+  // picked up immediately instead of being masked forever by a stale cached copy
+  // (this is exactly what caused the app to look like an old version with no
+  // login screen — the SW kept serving the index.html cached before login existed).
+  const isAppShellDoc = req.mode === 'navigate' || url.pathname.endsWith('/index.html') || url.pathname === '/' ;
+  if (url.origin === self.location.origin && isAppShellDoc) {
+    e.respondWith(
+      fetch(req).then((res) => {
+        const copy = res.clone();
+        caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
+        return res;
+      }).catch(() => caches.match(req).then((hit) => hit || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Other same-origin static assets (icons, manifest): cache-first is fine, they rarely change.
   if (url.origin === self.location.origin) {
     e.respondWith(
       caches.match(req).then((hit) => {
@@ -56,10 +73,7 @@ self.addEventListener('fetch', (e) => {
           const copy = res.clone();
           caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
           return res;
-        }).catch(() => {
-          if (req.mode === 'navigate') return caches.match('./index.html');
-          return Response.error();
-        });
+        }).catch(() => Response.error());
       })
     );
   }
