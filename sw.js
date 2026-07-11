@@ -1,5 +1,5 @@
 /* Investigación Fantasma — service worker */
-const VERSION = 'fantasma-v2';
+const VERSION = 'fantasma-v3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -7,7 +7,8 @@ const APP_SHELL = [
   './icon-192.png',
   './icon-512.png',
   './icon-maskable-512.png',
-  './apple-touch-icon.png'
+  './apple-touch-icon.png',
+  './asr-worker.js'
 ];
 
 self.addEventListener('install', (e) => {

@@ -235,32 +235,43 @@
 </style>
 </head>
 <body>
-<script type="module">
-  // ================= Local offline speech-to-text (Whisper via Transformers.js) =================
-  // Loaded lazily — only touched the first time a recording needs it (video recording with
-  // "export audio track" on, where the browser's mic-based SpeechRecognition can't get the
-  // microphone because the recording already holds it). Runs fully client-side, no network
-  // needed once the model is cached by the browser.
-  let _pipelinePromise = null;
-  async function _load(){
-    if(_pipelinePromise) return _pipelinePromise;
-    _pipelinePromise = (async () => {
-      const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-      // 'tiny' multilingual model: smallest usable Whisper size, works offline once cached.
-      return await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
-        quantized: true
-      });
-    })();
-    return _pipelinePromise;
-  }
-  window.__localASR = {
-    load: _load,
-    async transcribe(float32, language){
-      const asr = await _load();
-      const out = await asr(float32, { language, task: 'transcribe' });
-      return (out && out.text) ? out.text : '';
+<script>
+  // ================= Local offline speech-to-text bridge (runs the heavy work in a Worker) =================
+  // The actual model (Whisper via Transformers.js) loads and runs entirely inside
+  // asr-worker.js, off the main thread. This used to load inline here and could
+  // block page rendering — including the camera preview — for up to a minute
+  // during WASM compile/model download. Now it never touches the main thread.
+  (function(){
+    let worker=null, reqId=0; const pending=new Map();
+    function getWorker(){
+      if(!worker){
+        worker=new Worker('asr-worker.js', { type:'module' });
+        worker.onmessage=(e)=>{
+          const {type,id}=e.data||{}; const p=pending.get(id); if(!p) return;
+          pending.delete(id);
+          if(type==='error') p.reject(new Error(e.data.message||'ASR worker error'));
+          else p.resolve(e.data);
+        };
+        worker.onerror=()=>{ /* individual calls are rejected via their own timeout/message below */ };
+      }
+      return worker;
     }
-  };
+    function call(msg, transfer){
+      return new Promise((resolve,reject)=>{
+        const id=++reqId; pending.set(id,{resolve,reject});
+        try{ getWorker().postMessage(Object.assign({id},msg), transfer||[]); }
+        catch(e){ pending.delete(id); reject(e); }
+      });
+    }
+    window.__localASR = {
+      load: ()=>call({type:'load'}),
+      transcribe: async (float32, language) => {
+        // Transfer the buffer instead of copying it — chunks are a few MB each.
+        const res = await call({type:'transcribe', audio:float32, language}, [float32.buffer]);
+        return res.text||'';
+      }
+    };
+  })();
 </script>
 <div id="stage">
   <div class="phone" id="phone">
@@ -431,7 +442,7 @@
         <button class="btn-outline" id="btnSwitchMethod" style="display:none;"></button>
         <button class="btn-outline" id="btnImportId"></button>
       </div>
-      <input type="file" id="adfkFile" accept=".ADFK,.adfk,application/json" class="hide">
+      <input type="file" id="adfkFile" accept=".ADFK,.adfk,.json,application/json,text/plain,application/octet-stream,*/*" class="hide">
     </div>
 
     <div class="toast" id="toast"></div>
@@ -1040,6 +1051,12 @@
   function setSetting(k,v){
     if(v==='true') v=true; else if(v==='false') v=false;
     state.settings[k]=v; syncSubScreens(); persist();
+    // Warm the local ASR model in the background the moment this is turned on, so it's
+    // more likely already cached/ready by the time the person actually presses record —
+    // this never touches the main thread, it just kicks off the worker's download early.
+    if(k==='exportAudio' && v===true && window.__localASR){
+      window.__localASR.load().catch(()=>{});
+    }
   }
 
   /* ---------- render / sync ---------- */
@@ -1471,7 +1488,8 @@
   function importAdfkFile(file){
     const r=new FileReader();
     r.onload=()=>{ try{
-      const d=JSON.parse(r.result);
+      const raw=(r.result||'').toString().trim();
+      const d=JSON.parse(raw);
       if(d && d.format==='ADFK' && d.userId && d.key){
         startRegister({userId:d.userId,key:d.key,createdAt:d.createdAt||Date.now(),imported:true});
       } else lockErr(S().errImport);
