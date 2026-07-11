@@ -599,6 +599,31 @@
 
   /* ---------- speech recognition ---------- */
   let recognizing=false, sttFatal=false, sttFailStreak=0, lastSttErr='';
+  // Detection buffer: Chrome/webkit often finalizes speech mid-phrase after a short
+  // pause (e.g. "buenas" then "buenas noches" as two separate finals for one utterance).
+  // Instead of logging every final immediately, hold it briefly to catch a continuation.
+  const FINAL_COMMIT_MS = 1100;
+  let pendingFinalText='', pendingFinalTimer=null;
+  function mergeFragments(prev, next){
+    const p=prev.trim(), n=next.trim();
+    if(!p) return n;
+    if(!n) return p;
+    const pl=p.toLowerCase(), nl=n.toLowerCase();
+    if(nl.startsWith(pl)) return n;   // next continues/extends prev ("buenas" -> "buenas noches")
+    if(pl.startsWith(nl)) return p;   // next is already contained in prev
+    return p+' '+n;                  // two distinct fragments within the buffer window — join them
+  }
+  function flushPendingFinal(){
+    if(pendingFinalTimer){ clearTimeout(pendingFinalTimer); pendingFinalTimer=null; }
+    const t=pendingFinalText; pendingFinalText='';
+    if(t) addPhrase(t);
+  }
+  function scheduleFinalCommit(text){
+    text=(text||'').trim(); if(!text) return;
+    pendingFinalText = mergeFragments(pendingFinalText, text);
+    if(pendingFinalTimer) clearTimeout(pendingFinalTimer);
+    pendingFinalTimer=setTimeout(flushPendingFinal, FINAL_COMMIT_MS);
+  }
   function setStt(text, isErr){
     const box=$('sttStatus');
     if(!text){ box.classList.remove('on'); return; }
@@ -1382,11 +1407,15 @@
   function registerSW(){
     if(!('serviceWorker' in navigator)) return;
     if(location.protocol!=='http:' && location.protocol!=='https:') return; // needs a server, not file://
-    // Auto-reload once when a new service worker takes over, so a fresh deploy
-    // is never masked by a stale cached copy — this is what caused the login
-    // screen to appear missing after an update. Guarded to fire only once per tab.
+    // controllerchange fires on the very FIRST install too (since our SW calls
+    // skipWaiting+clients.claim unconditionally), not only on genuine updates.
+    // Only auto-reload when a controller already existed before — i.e. a real
+    // update replacing a previous version — otherwise every fresh install/cache
+    // clear triggers an unwanted reload right as the page is settling its layout.
+    const hadControllerBefore = !!navigator.serviceWorker.controller;
     let reloadedForUpdate=false;
     navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+      if(!hadControllerBefore) return; // first install taking control — not an update
       if(reloadedForUpdate) return; reloadedForUpdate=true;
       try{ if(sessionStorage.getItem('fantasma_sw_reloaded')==='1') return; sessionStorage.setItem('fantasma_sw_reloaded','1'); }catch(e){}
       location.reload();
