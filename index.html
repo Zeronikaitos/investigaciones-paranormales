@@ -2,25 +2,11 @@
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Investigación Fantasma</title>
-
-<!-- PWA -->
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#DD9100">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Fantasma">
-<meta name="description" content="Detección paranormal de voz — cámara, grabación y bitácora.">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
   :root{
     --orange:#DD9100; --orange-d:#C67E00; --dark:#292929; --red:#FF0000; --white:#FFFFFF;
@@ -172,65 +158,6 @@
   .toast.on{display:block;}
 
   .main-pad{padding:24px 22px 26px;height:100%;display:flex;flex-direction:column;}
-
-  /* ===== Device mode: real phone / installed app fills the whole screen ===== */
-  body.device{background:linear-gradient(180deg,var(--orange) 0%,var(--orange-d) 100%);place-items:stretch;}
-  body.device #stage{transform:none!important;width:100%;height:100dvh;}
-  body.device .phone{
-    width:100%;height:100dvh;border-radius:0;
-    box-shadow:none;background:linear-gradient(180deg,var(--orange) 0%,var(--orange-d) 100%);
-  }
-  body.device .main-pad{
-    padding-top:calc(20px + env(safe-area-inset-top));
-    padding-bottom:calc(20px + env(safe-area-inset-bottom));
-    padding-left:calc(22px + env(safe-area-inset-left));
-    padding-right:calc(22px + env(safe-area-inset-right));
-  }
-  body.device .sub{
-    padding-top:calc(20px + env(safe-area-inset-top));
-    padding-bottom:calc(16px + env(safe-area-inset-bottom));
-  }
-  body.device .menu-panel{padding-top:calc(22px + env(safe-area-inset-top));}
-  body.device .pill-sim{top:calc(12px + env(safe-area-inset-top));}
-  body.device .toast{bottom:calc(24px + env(safe-area-inset-bottom));}
-  /* On tall phones, let the content breathe and center the camera nicely */
-  body.device .cam-wrap{margin-top:min(6vh,44px);}
-  body.device .lower{display:flex;flex-direction:column;justify-content:flex-end;}
-
-  /* stt status */
-  .stt{font-size:10px;font-weight:700;letter-spacing:.06em;color:rgba(255,255,255,.85);margin:-2px 0 6px;display:none;align-items:center;gap:6px;}
-  .stt.on{display:flex;}
-  .stt .sd{width:7px;height:7px;border-radius:50%;background:var(--red);animation:recPulse 1s infinite;}
-  .stt.err{color:#fff;} .stt.err .sd{background:#fff;animation:none;}
-
-  /* lock screen */
-  .lock{position:absolute;inset:0;z-index:60;background:linear-gradient(180deg,var(--orange) 0%,var(--orange-d) 100%);display:none;flex-direction:column;align-items:center;justify-content:center;padding:32px 26px;text-align:center;}
-  .lock.on{display:flex;}
-  body.device .lock{padding-top:calc(32px + env(safe-area-inset-top));padding-bottom:calc(32px + env(safe-area-inset-bottom));}
-  .lock-badge{width:96px;height:96px;border-radius:26px;background:var(--dark);display:flex;align-items:center;justify-content:center;margin-bottom:22px;box-shadow:0 18px 34px -14px rgba(0,0,0,.55);}
-  .lock-badge svg{width:52px;height:52px;}
-  .lock-title{font-size:20px;font-weight:800;color:var(--dark);line-height:1.15;}
-  .lock-sub{font-size:12px;color:rgba(41,41,41,.7);margin-top:8px;line-height:1.5;max-width:280px;}
-  .lock-id{font-size:11px;font-weight:700;color:var(--dark);background:rgba(41,41,41,.1);border-radius:999px;padding:5px 12px;margin-top:14px;font-variant-numeric:tabular-nums;}
-  .lock-actions{width:100%;max-width:300px;margin-top:26px;display:flex;flex-direction:column;gap:11px;}
-  .btn-primary{background:var(--dark);color:var(--white);border:none;border-radius:12px;padding:15px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:9px;}
-  .btn-outline{background:transparent;border:1.5px solid var(--dark);color:var(--dark);border-radius:12px;padding:13px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;}
-  .field{width:100%;border:1.5px solid var(--dark);border-radius:12px;padding:14px 15px;font-size:15px;font-family:inherit;font-weight:600;color:var(--dark);background:var(--white);letter-spacing:.06em;text-align:center;}
-  .field::placeholder{color:rgba(41,41,41,.4);letter-spacing:0;}
-  .lock-note{font-size:10px;color:rgba(41,41,41,.6);margin-top:2px;line-height:1.4;}
-  .lock-err{font-size:11px;font-weight:700;color:#7a0000;background:rgba(255,0,0,.14);border-radius:10px;padding:9px 12px;margin-top:4px;display:none;}
-  .lock-err.on{display:block;}
-
-  /* small inputs / connect rows */
-  .field-sm{width:100%;border:1.5px solid rgba(41,41,41,.4);border-radius:10px;padding:11px 12px;font-size:12px;font-family:inherit;font-weight:600;color:var(--dark);background:var(--white);margin-top:8px;}
-  .opt-btn{margin-top:10px;background:var(--dark);color:var(--white);border:none;border-radius:11px;padding:12px 14px;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;width:100%;}
-  .opt-btn.ghost{background:transparent;border:1.5px solid var(--dark);color:var(--dark);}
-  .status-line{font-size:11px;font-weight:700;margin-top:10px;display:flex;align-items:center;gap:7px;color:rgba(41,41,41,.7);}
-  .status-line .sdot{width:8px;height:8px;border-radius:50%;background:rgba(41,41,41,.3);}
-  .status-line.ok .sdot{background:#1a7f37;}
-  .path-row{display:flex;align-items:center;gap:12px;padding:12px 4px;}
-  .path-name{font-size:12px;font-weight:600;color:rgba(41,41,41,.7);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .hide{display:none!important;}
 </style>
 </head>
 <body>
@@ -268,7 +195,6 @@
             <div style="flex:1;min-width:0;">
               <canvas class="viz" id="viz" width="320" height="76"></canvas>
               <div class="label" id="lblLast"></div>
-              <div class="stt" id="sttStatus"><span class="sd"></span><span id="sttText"></span></div>
               <div class="interim" id="interim" style="display:none;"></div>
               <div id="mainPhrases"></div>
             </div>
@@ -320,26 +246,6 @@
         <div class="sect-lbl" id="vSubs"></div>
         <div class="opt" data-set="exportSubs" data-val="false"><span class="radio"><span class="fill"></span></span><span class="otext" id="vNoSubs"></span></div>
         <div class="opt" data-set="exportSubs" data-val="true"><span class="radio"><span class="fill"></span></span><span class="otext" id="vYesSubs"></span></div>
-
-        <!-- Ruta de guardado (solo dispositivo) -->
-        <div id="pathSection">
-          <div class="sect-lbl" id="vPath"></div>
-          <div class="path-row"><span class="path-name" id="pathName"></span></div>
-          <button class="opt-btn ghost" id="btnChooseFolder"></button>
-        </div>
-
-        <!-- Nube (solo nube) -->
-        <div id="cloudSection">
-          <div class="sect-lbl" id="cloudSel"></div>
-          <div class="opt" data-cloud="none"><span class="radio"><span class="fill"></span></span><span class="otext" id="cNone"></span></div>
-          <div class="opt" data-cloud="drive"><span class="radio"><span class="fill"></span></span><span class="otext" id="cDrive"></span></div>
-          <div class="opt" data-cloud="dropbox"><span class="radio"><span class="fill"></span></span><span class="otext" id="cDropbox"></span></div>
-          <div id="cloudCreds" class="hide">
-            <input class="field-sm" id="cloudCredInput" autocomplete="off" spellcheck="false">
-            <button class="opt-btn" id="btnCloudConnect"></button>
-            <div class="status-line" id="cloudStatus"><span class="sdot"></span><span id="cloudStatusText"></span></div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -359,8 +265,6 @@
         <div class="panic-card" id="btnPanic"><div><div class="pt" id="panic"></div><div class="ps" id="panicSub"></div></div><div class="pi"><span></span></div></div>
         <div class="row-card" id="btnLicense"><div class="rt" id="license"></div><span class="chev">›</span></div>
         <div class="lang-card" id="btnLangMenu"><div><div class="lt" id="language"></div><div class="ls" id="langSub"></div></div><div class="lb" id="langLabelMenu"></div></div>
-        <div class="row-card" id="btnExportId"><div class="rt" id="exportId"></div><span class="chev">↧</span></div>
-        <div class="row-card" id="btnLockNow"><div class="rt" id="lockNow"></div><span class="chev">⏻</span></div>
         <div class="ver"><div class="v1" id="version"></div><div class="v2" id="dev"></div></div>
       </div>
     </div>
@@ -383,25 +287,6 @@
         <div class="modal-body" id="licBody"></div>
         <div class="btn-dark" id="closeLicense"></div>
       </div>
-    </div>
-
-    <!-- LOCK / LOGIN -->
-    <div class="lock" id="lockScreen">
-      <div class="lock-badge">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#DD9100" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-      </div>
-      <div class="lock-title" id="lockTitle"></div>
-      <div class="lock-sub" id="lockSub"></div>
-      <div class="lock-id hide" id="lockId"></div>
-      <div class="lock-err" id="lockErr"></div>
-      <div class="lock-actions">
-        <input class="field hide" id="pinInput" type="password" inputmode="numeric" maxlength="12" autocomplete="off">
-        <input class="field hide" id="pinInput2" type="password" inputmode="numeric" maxlength="12" autocomplete="off">
-        <div class="lock-note hide" id="lockNote"></div>
-        <button class="btn-primary" id="btnPrimaryAuth"></button>
-        <button class="btn-outline" id="btnImportId"></button>
-      </div>
-      <input type="file" id="adfkFile" accept=".ADFK,.adfk,application/json" class="hide">
     </div>
 
     <div class="toast" id="toast"></div>
@@ -454,47 +339,6 @@
     }
   };
 
-  Object.assign(DICT.es, {
-    lockCreateTitle:"Crea tu identidad", lockCreateSub:"Se generará una clave única para este dispositivo y un archivo .ADFK de respaldo.",
-    lockUnlockTitle:"Desbloquear", lockUnlockSub:"Confirma tu identidad para entrar.",
-    btnCreate:"Crear identidad y entrar", btnUnlockBio:"Desbloquear con huella / rostro", btnEnter:"Entrar", btnImport:"Importar identidad (.ADFK)",
-    noteBio:"Se usará la huella, rostro o PIN de tu dispositivo.", notePin:"Este navegador no admite biometría. Define un PIN de 4+ dígitos.",
-    phPin:"PIN", phPinNew:"Nuevo PIN (4+ dígitos)", phPinRepeat:"Repite el PIN", phPinEnter:"Ingresa tu PIN",
-    errPinShort:"El PIN debe tener al menos 4 dígitos", errPinMismatch:"Los PIN no coinciden", errPinWrong:"PIN incorrecto", errAuth:"No se pudo verificar la identidad. Inténtalo de nuevo.", errImport:"Archivo .ADFK no válido",
-    idCreated:"Identidad creada", idImported:"Identidad importada", adfkSaved:"Respaldo .ADFK descargado", locked:"App bloqueada",
-    exportId:"Exportar identidad (.ADFK)", lockNow:"Bloquear ahora",
-    vPath:"Ruta de guardado", vChooseFolder:"Elegir carpeta…", vFolderNone:"Sin carpeta — se descargará .ZIP", vFolderUnsup:"Este navegador no permite elegir carpeta; se usará .ZIP",
-    cloudSel:"Servicio de nube", cNone:"Ninguno", cDrive:"Google Drive", cDropbox:"Dropbox",
-    cConnect:"Conectar", cDisconnect:"Desconectar", cConnected:"Conectado", cDisconnected:"Sin conectar",
-    phDriveId:"Pega tu Client ID de Google", phDropboxKey:"Pega tu App key de Dropbox",
-    cNeedCreds:"Falta la credencial del servicio", cUploading:"Subiendo a la nube…", cUploaded:"Subido a la nube", cUploadFail:"Falló la subida a la nube", cConnFail:"No se pudo conectar",
-    zipSaved:"Guardado en .ZIP", folderSaved:"Guardado en carpeta",
-    sttUnsup:"Reconocimiento de voz no soportado en este navegador", sttHttps:"El reconocimiento de voz requiere HTTPS (no funciona abriendo el archivo directo)",
-    sttDenied:"Permiso de micrófono denegado", sttListening:"escuchando…", sttError:"Error de reconocimiento", sttRetry:"reconectando…",
-    sttMicBusy:"Micrófono ocupado por otra captura — desactiva 'Exportar pista de audio' o cierra otras apps que usen el micro",
-    sttNetDown:"Sin conexión con el servicio de voz — el reconocimiento necesita internet"
-  });
-  Object.assign(DICT.en, {
-    lockCreateTitle:"Create your identity", lockCreateSub:"A unique key for this device and an .ADFK backup file will be generated.",
-    lockUnlockTitle:"Unlock", lockUnlockSub:"Confirm your identity to enter.",
-    btnCreate:"Create identity & enter", btnUnlockBio:"Unlock with fingerprint / face", btnEnter:"Enter", btnImport:"Import identity (.ADFK)",
-    noteBio:"Your device fingerprint, face or PIN will be used.", notePin:"This browser has no biometrics. Set a 4+ digit PIN.",
-    phPin:"PIN", phPinNew:"New PIN (4+ digits)", phPinRepeat:"Repeat PIN", phPinEnter:"Enter your PIN",
-    errPinShort:"PIN must be at least 4 digits", errPinMismatch:"PINs don't match", errPinWrong:"Wrong PIN", errAuth:"Could not verify identity. Try again.", errImport:"Invalid .ADFK file",
-    idCreated:"Identity created", idImported:"Identity imported", adfkSaved:".ADFK backup downloaded", locked:"App locked",
-    exportId:"Export identity (.ADFK)", lockNow:"Lock now",
-    vPath:"Save location", vChooseFolder:"Choose folder…", vFolderNone:"No folder — a .ZIP will download", vFolderUnsup:"This browser can't pick a folder; a .ZIP will be used",
-    cloudSel:"Cloud service", cNone:"None", cDrive:"Google Drive", cDropbox:"Dropbox",
-    cConnect:"Connect", cDisconnect:"Disconnect", cConnected:"Connected", cDisconnected:"Not connected",
-    phDriveId:"Paste your Google Client ID", phDropboxKey:"Paste your Dropbox App key",
-    cNeedCreds:"Service credential missing", cUploading:"Uploading to cloud…", cUploaded:"Uploaded to cloud", cUploadFail:"Cloud upload failed", cConnFail:"Could not connect",
-    zipSaved:"Saved as .ZIP", folderSaved:"Saved to folder",
-    sttUnsup:"Speech recognition not supported in this browser", sttHttps:"Speech recognition requires HTTPS (won't work opening the raw file)",
-    sttDenied:"Microphone permission denied", sttListening:"listening…", sttError:"Recognition error", sttRetry:"reconnecting…",
-    sttMicBusy:"Mic captured by another recording — turn off 'Export audio track' or close other apps using the mic",
-    sttNetDown:"Can't reach the speech service — recognition needs internet"
-  });
-
   const SIM_PHRASES = {
     es:['Hay alguien aquí','No estoy solo','Sal de este lugar','Te veo','Ayúdame','Frío... mucho frío','¿Quién eres?','Detrás de ti','No tengas miedo','Ellos escuchan','Márchate ahora','Puedo verte'],
     en:['Someone is here','I am not alone','Leave this place','I see you','Help me','So cold','Who are you?','Behind you','Do not be afraid','They are listening','Leave now','I can see you']
@@ -508,8 +352,7 @@
     elapsed:0, phrases:[], interim:'',
     settings:Object.assign({}, DEFAULTS),
     sim:false, menuOpen:false, panicOpen:false, licenseOpen:false, toast:'',
-    sessionName:'', sessionCount:0,
-    locked:true, dirName:''
+    sessionName:'', sessionCount:0
   };
 
   // runtime handles
@@ -536,54 +379,23 @@
   }
   function setupAnalyser(st){
     try{
-      if(!st.getAudioTracks().length) return;
       const AC=window.AudioContext||window.webkitAudioContext;
-      if(!audioCtx) audioCtx=new AC();
-      if(audioCtx.state==='suspended') audioCtx.resume().catch(()=>{});
+      audioCtx=new AC();
       const src=audioCtx.createMediaStreamSource(st);
       analyser=audioCtx.createAnalyser(); analyser.fftSize=128; analyser.smoothingTimeConstant=0.75;
       src.connect(analyser); freq=new Uint8Array(analyser.frequencyBinCount);
     }catch(e){}
   }
-  // Stop only the audio tracks (keep video preview) so the mic is free for speech recognition.
-  // Never do it while a recording that exports audio is running — it would silence the video.
-  function releaseMic(){
-    if(!stream) return;
-    if(state.recording && state.settings.exportAudio) return;
-    const at=stream.getAudioTracks();
-    if(!at.length) return;
-    at.forEach(t=>{ try{ t.stop(); }catch(e){} try{ stream.removeTrack(t); }catch(e){} });
-    analyser=null; freq=null;
-  }
-  // wantAudio=false → video-only, leaving the mic FREE for speech recognition.
-  // wantAudio=true  → include the mic track (needed when recording with audio export).
-  async function ensureCamera(wantAudio){
+  async function ensureCamera(){
     if(state.sim) return true;
-    const needAudio=!!wantAudio;
-    if(stream){
-      const hasAudio=stream.getAudioTracks().length>0;
-      if(needAudio && hasAudio) return true;
-      if(!needAudio){
-        // CRITICAL: if a previous recording left the mic captured, release it now,
-        // otherwise speech recognition gets no audio and loops "reconnecting".
-        if(hasAudio) releaseMic();
-        return true;
-      }
-      // We need audio now but the current stream is video-only: re-acquire.
-      try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
-      stream=null; analyser=null; freq=null;
-    }
+    if(stream) return true;
     try{
-      stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:'user'},audio:needAudio});
-      if(needAudio) setupAnalyser(stream);
+      stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:'user'},audio:true});
+      setupAnalyser(stream);
       state.cameraReady=true; state.camError='';
       attachStream(); sync();
       return true;
     }catch(e){
-      if(needAudio){ // audio may have been blocked; fall back to video-only so preview still works
-        try{ stream=await navigator.mediaDevices.getUserMedia({video:{aspectRatio:1,facingMode:'user'},audio:false});
-          state.cameraReady=true; state.camError=''; attachStream(); sync(); return true; }catch(_){}
-      }
       state.camError=S().camFail; sync();
       return false;
     }
@@ -591,23 +403,11 @@
   function stopStream(){ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;} }
 
   /* ---------- speech recognition ---------- */
-  let recognizing=false, sttFatal=false, sttFailStreak=0, lastSttErr='';
-  function setStt(text, isErr){
-    const box=$('sttStatus');
-    if(!text){ box.classList.remove('on'); return; }
-    box.classList.add('on'); box.classList.toggle('err',!!isErr);
-    $('sttText').textContent=text;
-  }
-  function sttSupported(){ return !!(window.SpeechRecognition||window.webkitSpeechRecognition); }
   function initRecognition(){
     const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
     if(!SR) return null;
-    const r=new SR(); r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
-    r.lang=state.lang==='es'?'es-ES':'en-US';
-    r.onstart=()=>{ recognizing=true; setStt(S().sttListening,false); };
-    r.onaudiostart=()=>{ sttFailStreak=0; setStt(S().sttListening,false); };
+    const r=new SR(); r.continuous=true; r.interimResults=true; r.lang=state.lang==='es'?'es-ES':'en-US';
     r.onresult=e=>{
-      sttFailStreak=0;
       let interim='';
       for(let i=e.resultIndex;i<e.results.length;i++){
         const res=e.results[i];
@@ -615,60 +415,9 @@
       }
       state.interim=interim.trim(); syncPhrases();
     };
-    r.onerror=e=>{
-      const err=(e&&e.error)||'';
-      lastSttErr=err;
-      if(err==='not-allowed'||err==='service-not-allowed'){ sttFatal=true; setStt(S().sttDenied,true); }
-      else if(err==='audio-capture'){ sttFailStreak++; setStt(S().sttMicBusy,true); }
-      else if(err==='network'){ sttFailStreak++; setStt(S().sttRetry,true); }
-      else if(err==='no-speech'){ /* normal silence timeout: NOT a failure */ lastSttErr=''; }
-      else if(err==='aborted'){ lastSttErr=''; }
-      else { sttFailStreak++; setStt(S().sttError,true); }
-    };
-    r.onend=()=>{
-      recognizing=false;
-      if(!state.listening){ setStt('',false); return; }
-      if(sttFatal) return;
-      // Persistent failure: surface a concrete diagnosis instead of looping forever.
-      if(sttFailStreak>=4){
-        setStt(lastSttErr==='network' ? S().sttNetDown : S().sttMicBusy, true);
-        showToast(lastSttErr==='network' ? S().sttNetDown : S().sttMicBusy);
-        sttFailStreak=0;
-      }
-      // Silence timeouts restart immediately and quietly; real errors back off.
-      const wasSilence=!lastSttErr;
-      const delay=wasSilence ? 120 : Math.min(300*Math.pow(2,sttFailStreak), 3000);
-      if(!wasSilence) setStt(S().sttRetry,false);
-      setTimeout(()=>{
-        if(!state.listening || sttFatal) return;
-        releaseMic(); // make sure nothing re-captured the mic while we were down
-        lastSttErr='';
-        try{ r.start(); }catch(_){}
-      }, delay);
-    };
+    r.onend=()=>{ if(state.listening){ try{r.start();}catch(e){} } };
+    r.onerror=()=>{};
     return r;
-  }
-
-  async function startListen(){
-    beginSession();
-    if(state.sim){ state.listening=true; setStt(S().sttListening,false); startSimPhrases(); syncMain(); return; }
-    if(!window.isSecureContext){ showToast(S().sttHttps); setStt(S().sttHttps,true); }
-    if(!sttSupported()){ showToast(S().sttUnsup); setStt(S().sttUnsup,true); }
-    await ensureCamera(false); // video only → mic stays free for recognition
-    releaseMic(); // belt & suspenders: never start recognition with the mic captured
-    sttFatal=false; sttFailStreak=0; lastSttErr='';
-    if(!recognition) recognition=initRecognition();
-    if(!recognition){ setStt(S().sttUnsup,true); return; }
-    recognition.lang=state.lang==='es'?'es-ES':'en-US';
-    state.listening=true; syncMain();
-    setStt(S().sttListening,false);
-    try{ recognition.start(); }
-    catch(e){ /* already started */ try{ recognition.stop(); }catch(_){} setTimeout(()=>{ try{ recognition.start(); }catch(_){} },200); }
-  }
-  function stopListen(){
-    stopSimPhrases();
-    state.listening=false; setStt('',false); syncMain(); maybeEndSession();
-    if(recognition){ try{ recognition.stop(); }catch(e){} }
   }
   function addPhrase(t){
     t=(t||'').trim(); if(!t) return;
@@ -677,7 +426,7 @@
       vts:fmt(state.elapsed), vname:state.sessionName||('VID_'+String(state.sessionCount||1).padStart(4,'0')),
       elapsed:state.elapsed, lang:state.lang
     });
-    state.interim=''; syncPhrases(); syncBitacora(); persist();
+    state.interim=''; syncPhrases(); syncBitacora();
   }
 
   /* ---------- session / timer ---------- */
@@ -687,11 +436,26 @@
     if(sessionActive) return;
     sessionActive=true; state.sessionCount++;
     state.sessionName='VID_'+String(state.sessionCount).padStart(4,'0'); state.elapsed=0;
-    startTimer(); syncTimer(); persist();
+    startTimer(); syncTimer();
   }
   function maybeEndSession(){ if(!state.recording && !state.listening){ sessionActive=false; stopTimer(); } }
 
   /* ---------- listen ---------- */
+  async function startListen(){
+    beginSession();
+    if(state.sim){ state.listening=true; startSimPhrases(); syncMain(); return; }
+    await ensureCamera();
+    if(!recognition) recognition=initRecognition();
+    if(!recognition){ showToast(S().noSpeech); return; }
+    recognition.lang=state.lang==='es'?'es-ES':'en-US';
+    state.listening=true; syncMain();
+    try{recognition.start();}catch(e){}
+  }
+  function stopListen(){
+    stopSimPhrases();
+    state.listening=false; syncMain(); maybeEndSession();
+    if(recognition){ try{recognition.stop();}catch(e){} }
+  }
   function startSimPhrases(){
     clearTimeout(simT);
     const tick=()=>{
@@ -714,9 +478,7 @@
   async function toggleRecord(){
     if(state.recording){ stopRecording(); return; }
     if(!state.sim){
-      // Only grab the mic for the recording if the user wants the audio track.
-      // Otherwise keep it video-only so speech recognition keeps the mic and detection works.
-      const ok=await ensureCamera(!!state.settings.exportAudio); if(!ok) return;
+      const ok=await ensureCamera(); if(!ok) return;
       try{
         chunks=[]; recStream=buildRecStream();
         const opts={};
@@ -734,47 +496,26 @@
   }
   function stopRecording(){
     const sess=state.sessionName;
-    state.recording=false; // set first so finalizeRecording (onstop) is allowed to release the mic
     try{ if(recorder && recorder.state!=='inactive') recorder.stop(); else finalizeRecording(sess); }catch(e){ finalizeRecording(sess); }
     stopListen();
-    syncMain(); maybeEndSession();
+    state.recording=false; syncMain(); maybeEndSession();
   }
-  async function finalizeRecording(){
-    releaseMic(); // free the mic as soon as the recorder is done, so detection keeps working
+  function finalizeRecording(){
     const sess=state.sessionName||('VID_'+String(state.sessionCount||1).padStart(4,'0'));
     const g=state.settings;
-    const files=[];
     if(!state.sim && chunks.length){
-      files.push({name:sess+'.webm', blob:new Blob(chunks,{type:(recorder&&recorder.mimeType)||'video/webm'})});
+      const blob=new Blob(chunks,{type:(recorder&&recorder.mimeType)||'video/webm'});
       chunks=[];
+      if(g.storage==='device'){ download(blob, sess+'.webm'); showToast(S().recSaved); }
+      else if(g.storage==='memory'){ memoryClips.push({name:sess,blob}); showToast(S().recMem); }
+      else { showToast(S().recCloud); }
+    }else{
+      showToast(state.sim?S().recSaved:S().recSaved);
     }
     if(g.exportSubs){
-      const srt=buildSrt(sess);
-      if(srt) files.push({name:sess+'.srt', blob:new Blob([srt],{type:'application/x-subrip'})});
+      const subs=buildSrt(sess);
+      if(subs) download(new Blob([subs],{type:'application/x-subrip'}), sess+'.srt');
     }
-    if(!files.length){ showToast(S().recSaved); return; }
-
-    if(g.storage==='memory'){ memoryClips.push({name:sess, files}); showToast(S().recMem); return; }
-
-    if(g.storage==='cloud'){
-      try{
-        if(!cloudConnected()){ showToast(S().cNeedCreds); throw new Error('not-connected'); }
-        showToast(S().cUploading);
-        if(cloud.provider==='drive') await driveUpload(sess, files);
-        else if(cloud.provider==='dropbox') await dropboxUpload(sess, files);
-        showToast(S().cUploaded); return;
-      }catch(e){
-        showToast(S().cUploadFail);
-        const zip=await zipFiles(sess, files); download(zip, sess+'.zip'); return;
-      }
-    }
-
-    // storage === 'device'
-    try{
-      const h=await fsa.handle();
-      if(h && await fsa.ensure(h)){ await fsa.write(h, sess, files); showToast(S().folderSaved+' · '+h.name+'/'+sess); return; }
-    }catch(e){}
-    const zip=await zipFiles(sess, files); download(zip, sess+'.zip'); showToast(S().zipSaved);
   }
   function buildSrt(sess){
     const items=state.phrases.filter(p=>p.vname===sess).slice().reverse();
@@ -807,7 +548,7 @@
     state.lang=nl;
     if(recognition){ recognition.lang=nl==='es'?'es-ES':'en-US'; if(state.listening){try{recognition.stop();}catch(e){}} }
     document.documentElement.lang=nl;
-    sync(); persist();
+    sync();
     showToast(S().langMsg);
   }
 
@@ -820,7 +561,7 @@
     state.phrases=[]; state.panicOpen=false; state.screen='main'; state.menuOpen=false;
     state.sim=false; state.sessionName=''; state.elapsed=0;
     $('simCam').style.display='none';
-    sync(); persist();
+    sync();
     showToast(S().restored);
   }
 
@@ -833,7 +574,7 @@
   }
   function setSetting(k,v){
     if(v==='true') v=true; else if(v==='false') v=false;
-    state.settings[k]=v; syncSubScreens(); persist();
+    state.settings[k]=v; syncSubScreens();
   }
 
   /* ---------- render / sync ---------- */
@@ -860,9 +601,6 @@
     $('vDevice').textContent=s.vDevice; $('vMemory').textContent=s.vMemory; $('vCloud').textContent=s.vCloud;
     $('vNoTrack').textContent=s.vNoTrack; $('vYesTrack').textContent=s.vYesTrack;
     $('vNoSubs').textContent=s.vNoSubs; $('vYesSubs').textContent=s.vYesSubs;
-    $('vPath').textContent=s.vPath;
-    $('cloudSel').textContent=s.cloudSel; $('cNone').textContent=s.cNone; $('cDrive').textContent=s.cDrive; $('cDropbox').textContent=s.cDropbox;
-    $('exportId').textContent=s.exportId; $('lockNow').textContent=s.lockNow;
     // modals
     $('panicTitle').textContent=s.panicTitle; $('panicBody').textContent=s.panicBody;
     $('doRestore').textContent=s.panicOk; $('cancelPanic').textContent=s.panicCancel;
@@ -933,7 +671,7 @@
       el.classList.toggle('sel', match);
     });
   }
-  function sync(){ syncStatic(); syncScreens(); syncMain(); syncTimer(); syncPhrases(); syncBitacora(); syncSubScreens(); syncVideoExtras(); try{persist();}catch(e){} }
+  function sync(){ syncStatic(); syncScreens(); syncMain(); syncTimer(); syncPhrases(); syncBitacora(); syncSubScreens(); }
 
   /* ---------- canvas loop ---------- */
   function drawViz(cv,data,t,active){
@@ -977,7 +715,7 @@
   $('menuClose').onclick=$('menuScrim').onclick=()=>{state.menuOpen=false;sync();};
   $('btnLangTop').onclick=switchLang;
   $('btnLangMenu').onclick=switchLang;
-  $('camPrompt').onclick=()=>ensureCamera(false);
+  $('camPrompt').onclick=ensureCamera;
   $('btnRec').onclick=toggleRecord;
   $('btnMic').onclick=()=>{ state.listening?stopListen():startListen(); };
   $('btnPanic').onclick=()=>{state.menuOpen=false;state.panicOpen=true;sync();};
@@ -985,364 +723,25 @@
   $('doRestore').onclick=doRestore;
   $('btnLicense').onclick=()=>{state.menuOpen=false;state.licenseOpen=true;sync();};
   $('closeLicense').onclick=()=>{state.licenseOpen=false;sync();};
-  $('bitClear').onclick=()=>{state.phrases=[];syncPhrases();syncBitacora();persist();};
+  $('bitClear').onclick=()=>{state.phrases=[];syncPhrases();syncBitacora();};
   document.querySelectorAll('.mcard[data-go]').forEach(el=>el.onclick=()=>goScreen(el.dataset.go));
   document.querySelectorAll('[data-back]').forEach(el=>el.onclick=goBack);
   document.querySelectorAll('.opt[data-set]').forEach(el=>el.onclick=()=>setSetting(el.dataset.set,el.dataset.val));
 
-  // lock screen
-  $('btnPrimaryAuth').onclick=primaryAuth;
-  $('btnImportId').onclick=()=>$('adfkFile').click();
-  $('adfkFile').onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) importAdfkFile(f); e.target.value=''; };
-  $('pinInput').addEventListener('keydown',e=>{ if(e.key==='Enter'){ if($('pinInput2').classList.contains('hide')) primaryAuth(); else $('pinInput2').focus(); } });
-  $('pinInput2').addEventListener('keydown',e=>{ if(e.key==='Enter') primaryAuth(); });
-  // identity in menu
-  $('btnExportId').onclick=()=>{ state.menuOpen=false; sync(); exportIdentity(); };
-  $('btnLockNow').onclick=lockNow;
-  // video: folder + cloud
-  $('btnChooseFolder').onclick=chooseFolder;
-  document.querySelectorAll('.opt[data-cloud]').forEach(el=>el.onclick=()=>{ cloud.provider=el.dataset.cloud; cloud.token=''; saveCloud(); syncVideoExtras(); });
-  $('cloudCredInput').addEventListener('input',()=>{ const v=$('cloudCredInput').value.trim(); if(cloud.provider==='drive') cloud.driveClientId=v; else if(cloud.provider==='dropbox') cloud.dropboxKey=v; saveCloud(); });
-  $('btnCloudConnect').onclick=cloudConnect;
-
-  /* ================= IndexedDB kv ================= */
-  const idb=(()=>{
-    let dbp;
-    function open(){ return dbp||(dbp=new Promise((res,rej)=>{
-      let r; try{ r=indexedDB.open('fantasma',1); }catch(e){ return rej(e); }
-      r.onupgradeneeded=()=>{ try{ r.result.createObjectStore('kv'); }catch(e){} };
-      r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);
-    })); }
-    const tx=(mode,fn)=>open().then(db=>new Promise((res,rej)=>{
-      const st=db.transaction('kv',mode).objectStore('kv'); const rq=fn(st);
-      rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
-    }));
-    return {
-      get:k=>tx('readonly',s=>s.get(k)).catch(()=>undefined),
-      set:(k,v)=>tx('readwrite',s=>s.put(v,k)).catch(()=>{}),
-      del:k=>tx('readwrite',s=>s.delete(k)).catch(()=>{})
-    };
-  })();
-
-  const b64=buf=>{ const b=new Uint8Array(buf); let s=''; for(let i=0;i<b.length;i++) s+=String.fromCharCode(b[i]); return btoa(s); };
-  const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
-  async function sha256hex(str){ const d=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str)); return [...new Uint8Array(d)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
-  function randId(){ const a=crypto.getRandomValues(new Uint8Array(16)); return b64(a).replace(/[^A-Za-z0-9]/g,'').slice(0,22); }
-
-  /* ================= identity + auth (WebAuthn / PIN) ================= */
-  let identity=null; // {userId, key, createdAt, cred, pinHash, pinSalt}
-  const auth={
-    bioAvailable(){ return !!(window.PublicKeyCredential && window.isSecureContext); },
-    async register(userId){
-      const challenge=crypto.getRandomValues(new Uint8Array(32));
-      const cred=await navigator.credentials.create({publicKey:{
-        challenge, rp:{name:'Investigación Fantasma'},
-        user:{id:new TextEncoder().encode(userId), name:userId, displayName:userId},
-        pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
-        authenticatorSelection:{authenticatorAttachment:'platform',userVerification:'required',residentKey:'preferred'},
-        timeout:60000, attestation:'none'
-      }});
-      return b64(cred.rawId);
-    },
-    async assert(credB64){
-      const challenge=crypto.getRandomValues(new Uint8Array(32));
-      await navigator.credentials.get({publicKey:{
-        challenge, timeout:60000, userVerification:'required',
-        allowCredentials:[{type:'public-key', id:unb64(credB64)}]
-      }});
-      return true;
-    }
-  };
-  async function loadIdentity(){ identity=await idb.get('identity')||null; return identity; }
-  function makeAdfk(id){
-    return JSON.stringify({ format:'ADFK', v:1, app:'Investigacion Fantasma',
-      userId:id.userId, key:id.key, createdAt:id.createdAt, device:navigator.userAgent }, null, 2);
-  }
-  function downloadAdfk(id){ download(new Blob([makeAdfk(id)],{type:'application/json'}), id.userId+'.ADFK'); }
-
-  /* ================= ZIP (store, no compression) ================= */
-  const crcTable=(()=>{ const t=new Uint32Array(256); for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } return t; })();
-  function crc32(u8){ let c=0xFFFFFFFF; for(let i=0;i<u8.length;i++) c=crcTable[(c^u8[i])&0xFF]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
-  async function zipFiles(folder, files){
-    const enc=new TextEncoder(); const parts=[]; const central=[]; let offset=0;
-    for(const f of files){
-      const name=folder+'/'+f.name;
-      const nameBytes=enc.encode(name);
-      const data=new Uint8Array(await f.blob.arrayBuffer());
-      const crc=crc32(data);
-      const lh=new DataView(new ArrayBuffer(30));
-      lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0,true); lh.setUint16(8,0,true);
-      lh.setUint16(10,0,true); lh.setUint16(12,0,true); lh.setUint32(14,crc,true);
-      lh.setUint32(18,data.length,true); lh.setUint32(22,data.length,true);
-      lh.setUint16(26,nameBytes.length,true); lh.setUint16(28,0,true);
-      parts.push(new Uint8Array(lh.buffer), nameBytes, data);
-      const ch=new DataView(new ArrayBuffer(46));
-      ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true); ch.setUint16(8,0,true);
-      ch.setUint16(10,0,true); ch.setUint16(12,0,true); ch.setUint16(14,0,true); ch.setUint32(16,crc,true);
-      ch.setUint32(20,data.length,true); ch.setUint32(24,data.length,true); ch.setUint16(28,nameBytes.length,true);
-      ch.setUint16(30,0,true); ch.setUint16(32,0,true); ch.setUint16(34,0,true); ch.setUint16(36,0,true);
-      ch.setUint32(38,0,true); ch.setUint32(42,offset,true);
-      central.push({head:new Uint8Array(ch.buffer), name:nameBytes});
-      offset+=30+nameBytes.length+data.length;
-    }
-    const cdStart=offset; let cdSize=0;
-    for(const c of central){ parts.push(c.head, c.name); cdSize+=c.head.length+c.name.length; }
-    const eocd=new DataView(new ArrayBuffer(22));
-    eocd.setUint32(0,0x06054b50,true); eocd.setUint16(8,files.length,true); eocd.setUint16(10,files.length,true);
-    eocd.setUint32(12,cdSize,true); eocd.setUint32(16,cdStart,true);
-    parts.push(new Uint8Array(eocd.buffer));
-    return new Blob(parts,{type:'application/zip'});
-  }
-
-  /* ================= File System Access (folder + subfolder per video) ================= */
-  const fsa={
-    supported(){ return typeof window.showDirectoryPicker==='function'; },
-    async choose(){ const h=await window.showDirectoryPicker({mode:'readwrite'}); await idb.set('dirHandle',h); state.dirName=h.name; return h; },
-    async handle(){ return idb.get('dirHandle'); },
-    async ensure(h){ try{ if((await h.queryPermission({mode:'readwrite'}))==='granted') return true; return (await h.requestPermission({mode:'readwrite'}))==='granted'; }catch(e){ return false; } },
-    async write(h, folder, files){
-      const sub=await h.getDirectoryHandle(folder,{create:true});
-      for(const f of files){ const fh=await sub.getFileHandle(f.name,{create:true}); const w=await fh.createWritable(); await w.write(f.blob); await w.close(); }
-    }
-  };
-
-  /* ================= Cloud (Google Drive via GIS / Dropbox) ================= */
-  const cloud={ provider:'none', driveClientId:'', dropboxKey:'', token:'', driveClient:null };
-  async function loadCloud(){ const c=await idb.get('cloud'); if(c) Object.assign(cloud, c, {token:'', driveClient:null}); }
-  function saveCloud(){ idb.set('cloud',{provider:cloud.provider, driveClientId:cloud.driveClientId, dropboxKey:cloud.dropboxKey}); }
-  function cloudConnected(){ return cloud.provider==='drive' ? !!cloud.driveClientId : cloud.provider==='dropbox' ? !!cloud.token : false; }
-  function driveInit(){
-    if(!(window.google&&google.accounts&&google.accounts.oauth2)) return false;
-    cloud.driveClient=google.accounts.oauth2.initTokenClient({ client_id:cloud.driveClientId, scope:'https://www.googleapis.com/auth/drive.file', callback:()=>{} });
-    return true;
-  }
-  function driveToken(){
-    return new Promise((res,rej)=>{
-      if(!cloud.driveClient && !driveInit()) return rej(new Error('gis'));
-      cloud.driveClient.callback=r=>{ if(r&&r.access_token){ cloud.token=r.access_token; res(r.access_token);} else rej(r||new Error('token')); };
-      try{ cloud.driveClient.requestAccessToken({prompt: cloud.token?'':'consent'}); }catch(e){ rej(e); }
-    });
-  }
-  async function driveUpload(folder, files){
-    const token=await driveToken();
-    const fr=await fetch('https://www.googleapis.com/drive/v3/files',{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({name:folder,mimeType:'application/vnd.google-apps.folder'})});
-    const fid=(await fr.json()).id;
-    for(const f of files){
-      const body=new FormData();
-      body.append('metadata',new Blob([JSON.stringify({name:f.name,parents:[fid]})],{type:'application/json'}));
-      body.append('file',f.blob);
-      await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',{method:'POST',headers:{Authorization:'Bearer '+token},body});
-    }
-  }
-  async function dropboxUpload(folder, files){
-    for(const f of files){
-      await fetch('https://content.dropboxapi.com/2/files/upload',{method:'POST',headers:{
-        Authorization:'Bearer '+cloud.token,
-        'Dropbox-API-Arg':JSON.stringify({path:'/'+folder+'/'+f.name,mode:'add',autorename:true,mute:true}),
-        'Content-Type':'application/octet-stream'
-      },body:f.blob});
-    }
-  }
-  function parseDropboxRedirect(){
-    if(location.hash && location.hash.indexOf('access_token=')>=0){
-      const p=new URLSearchParams(location.hash.slice(1)); const t=p.get('access_token');
-      if(t){ cloud.provider='dropbox'; cloud.token=t; saveCloud(); try{history.replaceState(null,'',location.pathname+location.search);}catch(e){} }
-    }
-  }
-
-  /* ================= lock screen / auth flow ================= */
-  let authMode='unlock', setupIdentity=null;
-  const showEl=el=>el.classList.remove('hide'), hideEl=el=>el.classList.add('hide');
-  function lockErr(msg){ const e=$('lockErr'); if(msg){e.textContent=msg;e.classList.add('on');}else e.classList.remove('on'); }
-  function renderLock(){
-    const s=S(); lockErr('');
-    const p1=$('pinInput'), p2=$('pinInput2'), note=$('lockNote'), lid=$('lockId');
-    p1.value=''; p2.value='';
-    const unlock = identity && authMode!=='register';
-    if(unlock){
-      $('lockTitle').textContent=s.lockUnlockTitle;
-      $('lockSub').textContent=s.lockUnlockSub;
-      lid.textContent=identity.userId; showEl(lid);
-      if(identity.cred){ hideEl(p1); hideEl(p2); hideEl(note); $('btnPrimaryAuth').textContent=s.btnUnlockBio; }
-      else { showEl(p1); p1.placeholder=s.phPinEnter; hideEl(p2); hideEl(note); $('btnPrimaryAuth').textContent=s.btnEnter; }
-    } else {
-      $('lockTitle').textContent=s.lockCreateTitle;
-      $('lockSub').textContent = (setupIdentity&&setupIdentity.imported) ? s.idImported : s.lockCreateSub;
-      hideEl(lid);
-      if(auth.bioAvailable()){ hideEl(p1); hideEl(p2); showEl(note); note.textContent=s.noteBio; }
-      else { showEl(p1); p1.placeholder=s.phPinNew; showEl(p2); p2.placeholder=s.phPinRepeat; showEl(note); note.textContent=s.notePin; }
-      $('btnPrimaryAuth').textContent=s.btnCreate;
-    }
-    $('btnImportId').textContent=s.btnImport;
-  }
-  function showLock(){ state.locked=true; $('lockScreen').classList.add('on'); renderLock(); }
-  function enterApp(){ state.locked=false; $('lockScreen').classList.remove('on'); sync(); }
-  function startRegister(imported){
-    authMode='register';
-    setupIdentity = imported || { userId:'USR-'+randId().slice(0,8).toUpperCase(), key:randId()+randId(), createdAt:Date.now(), imported:false };
-    renderLock();
-  }
-  async function doSetup(){
-    const s=S();
-    if(!setupIdentity) startRegister(null);
-    let rec;
-    if(auth.bioAvailable()){
-      try{ const cred=await auth.register(setupIdentity.userId);
-        rec={userId:setupIdentity.userId,key:setupIdentity.key,createdAt:setupIdentity.createdAt,cred,pinHash:null,pinSalt:null};
-      }catch(e){ lockErr(s.errAuth); return; }
-    } else {
-      const a=$('pinInput').value.trim(), b=$('pinInput2').value.trim();
-      if(a.length<4){ lockErr(s.errPinShort); return; }
-      if(a!==b){ lockErr(s.errPinMismatch); return; }
-      const salt=randId(); const h=await sha256hex(salt+a);
-      rec={userId:setupIdentity.userId,key:setupIdentity.key,createdAt:setupIdentity.createdAt,cred:null,pinHash:h,pinSalt:salt};
-    }
-    identity=rec; await idb.set('identity',identity);
-    downloadAdfk(identity);
-    showToast(setupIdentity.imported? s.idImported : s.idCreated);
-    setupIdentity=null; authMode='unlock';
-    enterApp();
-    setTimeout(()=>showToast(S().adfkSaved),1200);
-  }
-  async function doUnlock(){
-    const s=S();
-    if(identity.cred){
-      try{ await auth.assert(identity.cred); enterApp(); }
-      catch(e){ lockErr(s.errAuth); }
-    } else if(identity.pinHash){
-      const a=$('pinInput').value.trim();
-      const h=await sha256hex(identity.pinSalt+a);
-      if(h===identity.pinHash) enterApp(); else lockErr(s.errPinWrong);
-    } else { enterApp(); }
-  }
-  function primaryAuth(){ (identity && authMode!=='register') ? doUnlock() : doSetup(); }
-  function lockNow(){
-    if(state.recording) stopRecording(); else stopListen();
-    state.menuOpen=false; authMode='unlock'; setupIdentity=null;
-    showLock(); sync(); showToast(S().locked);
-  }
-  function exportIdentity(){ if(identity){ downloadAdfk(identity); showToast(S().adfkSaved); } }
-  function importAdfkFile(file){
-    const r=new FileReader();
-    r.onload=()=>{ try{
-      const d=JSON.parse(r.result);
-      if(d && d.format==='ADFK' && d.userId && d.key){
-        startRegister({userId:d.userId,key:d.key,createdAt:d.createdAt||Date.now(),imported:true});
-      } else lockErr(S().errImport);
-    }catch(e){ lockErr(S().errImport); } };
-    r.readAsText(file);
-  }
-
-  /* ================= cloud connect ================= */
-  async function cloudConnect(){
-    const s=S();
-    if(cloud.provider==='none') return;
-    if(cloudConnected()){ cloud.token=''; syncVideoExtras(); return; }
-    const val=($('cloudCredInput').value||'').trim();
-    if(cloud.provider==='drive'){
-      if(!val){ showToast(s.cNeedCreds); return; }
-      cloud.driveClientId=val; saveCloud();
-      if(!(window.google&&google.accounts&&google.accounts.oauth2)){ showToast(s.cConnFail); return; }
-      try{ await driveToken(); showToast(s.cConnected); }catch(e){ showToast(s.cConnFail); }
-      syncVideoExtras();
-    } else if(cloud.provider==='dropbox'){
-      if(!val){ showToast(s.cNeedCreds); return; }
-      cloud.dropboxKey=val; saveCloud();
-      const redirect=location.origin+location.pathname;
-      location.href='https://www.dropbox.com/oauth2/authorize?response_type=token&client_id='+encodeURIComponent(val)+'&redirect_uri='+encodeURIComponent(redirect);
-    }
-  }
-  async function chooseFolder(){
-    const s=S();
-    if(!fsa.supported()){ showToast(s.vFolderUnsup); return; }
-    try{ const h=await fsa.choose(); showToast(h.name); syncVideoExtras(); }catch(e){}
-  }
-  function syncVideoExtras(){
-    const s=S(), g=state.settings;
-    $('pathSection').classList.toggle('hide', g.storage!=='device');
-    $('cloudSection').classList.toggle('hide', g.storage!=='cloud');
-    // path
-    $('pathName').textContent = state.dirName ? state.dirName+'/' : (fsa.supported()? s.vFolderNone : s.vFolderUnsup);
-    $('btnChooseFolder').textContent=s.vChooseFolder;
-    // cloud radios
-    document.querySelectorAll('.opt[data-cloud]').forEach(el=>el.classList.toggle('sel', el.dataset.cloud===cloud.provider));
-    const showCreds = cloud.provider!=='none';
-    $('cloudCreds').classList.toggle('hide', !showCreds);
-    if(showCreds){
-      const inp=$('cloudCredInput');
-      if(document.activeElement!==inp){ inp.value = cloud.provider==='drive'?cloud.driveClientId:cloud.dropboxKey; }
-      inp.placeholder = cloud.provider==='drive'? s.phDriveId : s.phDropboxKey;
-      $('btnCloudConnect').textContent = cloudConnected()? s.cDisconnect : s.cConnect;
-      const st=$('cloudStatus'); st.classList.toggle('ok',cloudConnected());
-      $('cloudStatusText').textContent = cloudConnected()? s.cConnected : s.cDisconnected;
-    }
-  }
-
-  /* ---------- persistence ---------- */
-  const STORE_KEY='fantasma_state_v1';
-  function persist(){
-    try{
-      localStorage.setItem(STORE_KEY, JSON.stringify({
-        lang:state.lang, settings:state.settings, phrases:state.phrases, sessionCount:state.sessionCount
-      }));
-    }catch(e){}
-  }
-  function loadPersisted(){
-    try{
-      const raw=localStorage.getItem(STORE_KEY); if(!raw) return;
-      const d=JSON.parse(raw);
-      if(d.lang==='es'||d.lang==='en') state.lang=d.lang;
-      if(d.settings) state.settings=Object.assign({}, DEFAULTS, d.settings);
-      if(Array.isArray(d.phrases)) state.phrases=d.phrases;
-      if(typeof d.sessionCount==='number') state.sessionCount=d.sessionCount;
-    }catch(e){}
-  }
-
-  /* ---------- device / responsive ---------- */
-  function isStandalone(){
-    return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) ||
-           (window.matchMedia && window.matchMedia('(display-mode: fullscreen)').matches) ||
-           window.navigator.standalone===true;
-  }
+  /* ---------- responsive fit ---------- */
   function fit(){
-    const stage=$('stage');
-    const deviceMode = isStandalone() || Math.min(window.innerWidth, window.innerHeight) <= 480;
-    document.body.classList.toggle('device', deviceMode);
-    if(deviceMode){
-      stage.style.transform='none';
-    }else{
-      const pad=16;
-      const sc=Math.min(1,(window.innerWidth-pad*2)/390,(window.innerHeight-pad*2)/844);
-      stage.style.transform='scale('+sc+')';
-    }
+    const stage=$('stage'), pad=16;
+    const sw=(window.innerWidth-pad*2)/390;
+    const sh=(window.innerHeight-pad*2)/844;
+    const sc=Math.min(1, sw, sh);
+    stage.style.transform='scale('+sc+')';
   }
   window.addEventListener('resize',fit);
-  window.addEventListener('orientationchange',fit);
-  if(window.matchMedia){ try{ window.matchMedia('(display-mode: standalone)').addEventListener('change',fit); }catch(e){} }
-
-  /* ---------- service worker ---------- */
-  function registerSW(){
-    if(!('serviceWorker' in navigator)) return;
-    if(location.protocol!=='http:' && location.protocol!=='https:') return; // needs a server, not file://
-    navigator.serviceWorker.register('sw.js').catch(()=>{});
-  }
 
   /* ---------- boot ---------- */
-  async function boot(){
-    loadPersisted();
-    try{ await loadCloud(); }catch(e){}
-    parseDropboxRedirect();
-    try{ const h=await fsa.handle(); if(h) state.dirName=h.name; }catch(e){}
-    try{ await loadIdentity(); }catch(e){}
-    document.documentElement.lang=state.lang;
-    authMode = identity ? 'unlock' : 'register';
-    if(!identity) startRegister(null);
-    sync(); fit();
-    showLock();
-    registerSW();
-    requestAnimationFrame(loop);
-  }
-  boot();
+  document.documentElement.lang=state.lang;
+  sync(); fit();
+  requestAnimationFrame(loop);
 })();
 </script>
 </body>
