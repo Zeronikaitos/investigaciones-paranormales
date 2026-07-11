@@ -235,6 +235,33 @@
 </style>
 </head>
 <body>
+<script type="module">
+  // ================= Local offline speech-to-text (Whisper via Transformers.js) =================
+  // Loaded lazily — only touched the first time a recording needs it (video recording with
+  // "export audio track" on, where the browser's mic-based SpeechRecognition can't get the
+  // microphone because the recording already holds it). Runs fully client-side, no network
+  // needed once the model is cached by the browser.
+  let _pipelinePromise = null;
+  async function _load(){
+    if(_pipelinePromise) return _pipelinePromise;
+    _pipelinePromise = (async () => {
+      const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+      // 'tiny' multilingual model: smallest usable Whisper size, works offline once cached.
+      return await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+        quantized: true
+      });
+    })();
+    return _pipelinePromise;
+  }
+  window.__localASR = {
+    load: _load,
+    async transcribe(float32, language){
+      const asr = await _load();
+      const out = await asr(float32, { language, task: 'transcribe' });
+      return (out && out.text) ? out.text : '';
+    }
+  };
+</script>
 <div id="stage">
   <div class="phone" id="phone">
 
@@ -318,6 +345,7 @@
         <div class="sect-lbl" id="vTrack"></div>
         <div class="opt" data-set="exportAudio" data-val="false"><span class="radio"><span class="fill"></span></span><span class="otext" id="vNoTrack"></span></div>
         <div class="opt" data-set="exportAudio" data-val="true"><span class="radio"><span class="fill"></span></span><span class="otext" id="vYesTrack"></span></div>
+        <div class="lock-note" id="vTrackNote" style="text-align:left;margin:6px 4px 0;"></div>
         <div class="sect-lbl" id="vSubs"></div>
         <div class="opt" data-set="exportSubs" data-val="false"><span class="radio"><span class="fill"></span></span><span class="otext" id="vNoSubs"></span></div>
         <div class="opt" data-set="exportSubs" data-val="true"><span class="radio"><span class="fill"></span></span><span class="otext" id="vYesSubs"></span></div>
@@ -426,6 +454,7 @@
       audioTitle:"Opciones de audio", aQuality:"Profundidad / Bitrate", aChan:"Canales", a16:"16 bit PCM", a128:"128 kbps AAC", aMono:"Mono", aStereo:"Estéreo",
       videoTitle:"Opciones de video", vStorage:"Almacenamiento", vDevice:"Guardar en dispositivo", vMemory:"Guardar en memoria", vCloud:"Guardar en la nube",
       vTrack:"Pista de audio", vNoTrack:"No exportar pista de audio", vYesTrack:"Exportar pista de audio",
+      vTrackNote:"Si exportas la pista de audio, la detección de frases usa un modelo local sin conexión durante esa grabación (un poco más lenta y en fragmentos de ~5s en vez de en vivo palabra por palabra). La primera vez descarga el modelo (~40-75 MB).",
       vSubs:"Subtítulos", vNoSubs:"No exportar subtítulos", vYesSubs:"Exportar subtítulos",
       panicTitle:"¿Restaurar de fábrica?", panicBody:"Se restaurarán los ajustes originales de instalación y se borrará la bitácora. Esta acción no se puede deshacer.", panicOk:"Restaurar y borrar", panicCancel:"Cancelar",
       licTitle:"Licencia de uso", licBody:"Software para investigación paranormal. Uso educativo y de entretenimiento. © 2026 StreetTube. Todos los derechos reservados.", close:"Cerrar",
@@ -445,6 +474,7 @@
       audioTitle:"Audio options", aQuality:"Depth / Bitrate", aChan:"Channels", a16:"16 bit PCM", a128:"128 kbps AAC", aMono:"Mono", aStereo:"Stereo",
       videoTitle:"Video options", vStorage:"Storage", vDevice:"Save to device", vMemory:"Save to memory", vCloud:"Save to cloud",
       vTrack:"Audio track", vNoTrack:"Don't export audio track", vYesTrack:"Export audio track",
+      vTrackNote:"If you export the audio track, phrase detection uses a local offline model during that recording (a bit slower, in ~5s chunks instead of live word-by-word). First use downloads the model (~40-75 MB).",
       vSubs:"Subtitles", vNoSubs:"Don't export subtitles", vYesSubs:"Export subtitles",
       panicTitle:"Factory reset?", panicBody:"Original install settings will be restored and the log will be erased. This action cannot be undone.", panicOk:"Reset & erase", panicCancel:"Cancel",
       licTitle:"License", licBody:"Software for paranormal investigation. For educational and entertainment use. © 2026 StreetTube. All rights reserved.", close:"Close",
@@ -477,6 +507,9 @@
     sttUnsup:"Reconocimiento de voz no soportado en este navegador", sttHttps:"El reconocimiento de voz requiere HTTPS (no funciona abriendo el archivo directo)",
     sttDenied:"Permiso de micrófono denegado", sttListening:"escuchando…", sttError:"Error de reconocimiento", sttRetry:"reconectando…",
     sttMicBusy:"Micrófono ocupado por otra captura — desactiva 'Exportar pista de audio' o cierra otras apps que usen el micro",
+    sttMicBusyOwnRec:"Este dispositivo no permite detectar frases mientras grabas con audio activado. Desactiva 'Exportar pista de audio' en Opciones de video si priorizas la detección.",
+    sttLocalLoading:"cargando modelo local (primera vez)…", sttListeningLocal:"escuchando (modelo local, sin conexión)…",
+    sttLocalFail:"No se pudo cargar el modelo de transcripción local en este dispositivo/navegador.",
     sttNetDown:"Sin conexión con el servicio de voz — el reconocimiento necesita internet"
   });
   Object.assign(DICT.en, {
@@ -500,6 +533,9 @@
     sttUnsup:"Speech recognition not supported in this browser", sttHttps:"Speech recognition requires HTTPS (won't work opening the raw file)",
     sttDenied:"Microphone permission denied", sttListening:"listening…", sttError:"Recognition error", sttRetry:"reconnecting…",
     sttMicBusy:"Mic captured by another recording — turn off 'Export audio track' or close other apps using the mic",
+    sttMicBusyOwnRec:"This device can't detect phrases while recording with audio enabled. Turn off 'Export audio track' in Video Options if detection is your priority.",
+    sttLocalLoading:"loading local model (first time)…", sttListeningLocal:"listening (local offline model)…",
+    sttLocalFail:"Couldn't load the local transcription model on this device/browser.",
     sttNetDown:"Can't reach the speech service — recognition needs internet"
   });
 
@@ -508,7 +544,7 @@
     en:['Someone is here','I am not alone','Leave this place','I see you','Help me','So cold','Who are you?','Behind you','Do not be afraid','They are listening','Leave now','I can see you']
   };
 
-  const DEFAULTS = { audioQuality:'16', channel:'stereo', storage:'device', exportAudio:true, exportSubs:true };
+  const DEFAULTS = { audioQuality:'16', channel:'stereo', storage:'device', exportAudio:false, exportSubs:true };
 
   const state = {
     screen:'main', lang:'es',
@@ -603,6 +639,92 @@
 
   /* ---------- speech recognition ---------- */
   let recognizing=false, sttFatal=false, sttFailStreak=0, lastSttErr='';
+
+  /* ================= Local offline ASR tap (Whisper) — used only when recording
+     WITH audio export, where the browser's mic-based recognition can't get the
+     microphone because MediaRecorder already holds it exclusively on many devices.
+     This taps the SAME shared track via Web Audio (non-exclusive, doesn't compete
+     with the recording) and runs speech-to-text locally, chunk by chunk. ================= */
+  const LOCAL_ASR_CHUNK_SEC = 5;
+  let localAsrCtx=null, localAsrSource=null, localAsrProcessor=null, localAsrSilentGain=null;
+  let localAsrBuffers=[], localAsrSampleCount=0, localAsrRate=48000, localAsrActive=false, localAsrBusy=false;
+
+  function resampleTo16k(float32, fromRate){
+    if(fromRate===16000) return float32;
+    const ratio=fromRate/16000;
+    const outLen=Math.floor(float32.length/ratio);
+    const out=new Float32Array(outLen);
+    for(let i=0;i<outLen;i++){
+      const srcPos=i*ratio, i0=Math.floor(srcPos), i1=Math.min(i0+1,float32.length-1), frac=srcPos-i0;
+      out[i]=float32[i0]*(1-frac)+float32[i1]*frac;
+    }
+    return out;
+  }
+  function concatFloat32(chunks, totalLen){
+    const out=new Float32Array(totalLen); let off=0;
+    for(const c of chunks){ out.set(c,off); off+=c.length; }
+    return out;
+  }
+  async function processLocalAsrChunk(float32, rate){
+    if(localAsrBusy) return; // drop overlapping work rather than pile up requests on a slow device
+    localAsrBusy=true;
+    try{
+      const resampled=resampleTo16k(float32, rate);
+      const lang = state.lang==='es' ? 'spanish' : 'english';
+      const text = await window.__localASR.transcribe(resampled, lang);
+      const t=(text||'').trim();
+      // Whisper sometimes emits stock filler on pure silence/noise chunks — ignore tiny/empty results.
+      if(t && t.length>1) addPhrase(t);
+    }catch(e){ /* one bad chunk shouldn't kill the session */ }
+    finally{ localAsrBusy=false; }
+  }
+  async function startLocalAsrTap(track){
+    stopLocalAsrTap();
+    try{
+      setStt(S().sttLocalLoading,false);
+      await window.__localASR.load(); // triggers the (one-time, cached) model download
+      const AC=window.AudioContext||window.webkitAudioContext;
+      localAsrCtx=new AC();
+      localAsrRate=localAsrCtx.sampleRate||48000;
+      const miniStream=new MediaStream([track]);
+      localAsrSource=localAsrCtx.createMediaStreamSource(miniStream);
+      localAsrProcessor=localAsrCtx.createScriptProcessor(4096,1,1);
+      localAsrSilentGain=localAsrCtx.createGain(); localAsrSilentGain.gain.value=0; // tap only, no echo
+      localAsrBuffers=[]; localAsrSampleCount=0; localAsrActive=true;
+      const chunkTarget=LOCAL_ASR_CHUNK_SEC*localAsrRate;
+      localAsrProcessor.onaudioprocess=e=>{
+        if(!localAsrActive) return;
+        localAsrBuffers.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+        localAsrSampleCount+=e.inputBuffer.getChannelData(0).length;
+        if(localAsrSampleCount>=chunkTarget){
+          const combined=concatFloat32(localAsrBuffers, localAsrSampleCount);
+          localAsrBuffers=[]; localAsrSampleCount=0;
+          processLocalAsrChunk(combined, localAsrRate);
+        }
+      };
+      localAsrSource.connect(localAsrProcessor);
+      localAsrProcessor.connect(localAsrSilentGain);
+      localAsrSilentGain.connect(localAsrCtx.destination);
+      setStt(S().sttListeningLocal,false);
+    }catch(e){
+      setStt(S().sttLocalFail,true); showToast(S().sttLocalFail);
+      stopLocalAsrTap();
+    }
+  }
+  function stopLocalAsrTap(){
+    localAsrActive=false;
+    // Flush whatever's left in the buffer as a final (shorter) chunk instead of discarding it.
+    if(localAsrSampleCount>0 && window.__localASR){
+      const combined=concatFloat32(localAsrBuffers, localAsrSampleCount);
+      localAsrBuffers=[]; localAsrSampleCount=0;
+      processLocalAsrChunk(combined, localAsrRate);
+    }
+    try{ localAsrProcessor && localAsrProcessor.disconnect(); }catch(e){}
+    try{ localAsrSource && localAsrSource.disconnect(); }catch(e){}
+    try{ localAsrSilentGain && localAsrSilentGain.disconnect(); }catch(e){}
+    try{ localAsrCtx && localAsrCtx.close(); }catch(e){}
+    localAsrCtx=null; localAsrSource=null; localAsrProcessor=null; localAsrSilentGain=null;
+  }
   // Detection buffer: Chrome/webkit often finalizes speech mid-phrase after a short
   // pause (e.g. "buenas" then "buenas noches" as two separate finals for one utterance).
   // Instead of logging every final immediately, hold it briefly to catch a continuation.
@@ -670,7 +792,13 @@
       const err=(e&&e.error)||'';
       lastSttErr=err;
       if(err==='not-allowed'||err==='service-not-allowed'){ sttFatal=true; setStt(S().sttDenied,true); }
-      else if(err==='audio-capture'){ sttFailStreak++; setStt(S().sttMicBusy,true); }
+      else if(err==='audio-capture'){
+        sttFailStreak++;
+        // If OUR OWN recording is holding the mic for the audio track, say so specifically —
+        // it's a different, more actionable message than "some other app is using the mic".
+        const ownRecordingHoldsMic = state.recording && state.settings.exportAudio;
+        setStt(ownRecordingHoldsMic ? S().sttMicBusyOwnRec : S().sttMicBusy, true);
+      }
       else if(err==='network'){ sttFailStreak++; setStt(S().sttRetry,true); }
       else if(err==='no-speech'){ /* normal silence timeout: NOT a failure */ lastSttErr=''; }
       else if(err==='aborted'){ lastSttErr=''; }
@@ -682,8 +810,9 @@
       if(sttFatal) return;
       // Persistent failure: surface a concrete diagnosis instead of looping forever.
       if(sttFailStreak>=4){
-        setStt(lastSttErr==='network' ? S().sttNetDown : S().sttMicBusy, true);
-        showToast(lastSttErr==='network' ? S().sttNetDown : S().sttMicBusy);
+        const ownRecordingHoldsMic = state.recording && state.settings.exportAudio;
+        const msg = lastSttErr==='network' ? S().sttNetDown : (ownRecordingHoldsMic ? S().sttMicBusyOwnRec : S().sttMicBusy);
+        setStt(msg,true); showToast(msg);
         sttFailStreak=0;
       }
       // Silence timeouts restart immediately and quietly; real errors back off.
@@ -703,6 +832,14 @@
   async function startListen(){
     beginSession();
     if(state.sim){ state.listening=true; setStt(S().sttListening,false); startSimPhrases(); syncMain(); return; }
+    // Recording WITH the audio track exported: the mic is exclusively held for the
+    // video's audio on many devices, so the browser's mic-based recognition can't
+    // run. Tap the SAME shared track (non-exclusive) and transcribe locally instead.
+    if(state.recording && state.settings.exportAudio && recStream && recStream.getAudioTracks().length){
+      state.listening=true; syncMain();
+      await startLocalAsrTap(recStream.getAudioTracks()[0]);
+      return;
+    }
     if(!window.isSecureContext){ showToast(S().sttHttps); setStt(S().sttHttps,true); }
     if(!sttSupported()){ showToast(S().sttUnsup); setStt(S().sttUnsup,true); }
     await ensureCamera(false); // video only → mic stays free for recognition
@@ -718,6 +855,7 @@
   }
   function stopListen(){
     stopSimPhrases();
+    stopLocalAsrTap();
     flushPendingFinal(); // don't lose a phrase still waiting to see if it continues
     state.listening=false; setStt('',false); syncMain(); maybeEndSession();
     if(recognition){ try{ recognition.stop(); }catch(e){} }
@@ -927,6 +1065,7 @@
     $('videoTitle').textContent=s.videoTitle; $('vStorage').textContent=s.vStorage; $('vTrack').textContent=s.vTrack; $('vSubs').textContent=s.vSubs;
     $('vDevice').textContent=s.vDevice; $('vMemory').textContent=s.vMemory; $('vCloud').textContent=s.vCloud;
     $('vNoTrack').textContent=s.vNoTrack; $('vYesTrack').textContent=s.vYesTrack;
+    $('vTrackNote').textContent=s.vTrackNote;
     $('vNoSubs').textContent=s.vNoSubs; $('vYesSubs').textContent=s.vYesSubs;
     $('vPath').textContent=s.vPath;
     $('cloudSel').textContent=s.cloudSel; $('cNone').textContent=s.cNone; $('cDrive').textContent=s.cDrive; $('cDropbox').textContent=s.cDropbox;
