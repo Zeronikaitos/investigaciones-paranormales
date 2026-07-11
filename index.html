@@ -34,7 +34,8 @@
   }
   @media (prefers-reduced-motion: reduce){ *{animation:none!important;transition:none!important;} }
 
-  #stage{transform-origin:center center;}
+  #stage{transform-origin:center center;opacity:0;transition:opacity .15s ease;}
+  #stage.ready{opacity:1;}
 
   .phone{
     position:relative;width:390px;height:844px;border-radius:38px;overflow:hidden;
@@ -637,7 +638,7 @@
     const r=new SR(); r.continuous=true; r.interimResults=true; r.maxAlternatives=1;
     r.lang=state.lang==='es'?'es-ES':'en-US';
     let processedFinalIndex=-1; // guards against Chrome redelivering an already-final result
-    r.onstart=()=>{ recognizing=true; processedFinalIndex=-1; setStt(S().sttListening,false); };
+    r.onstart=()=>{ recognizing=true; processedFinalIndex=-1; flushPendingFinal(); setStt(S().sttListening,false); };
     r.onaudiostart=()=>{ sttFailStreak=0; setStt(S().sttListening,false); };
     r.onresult=e=>{
       sttFailStreak=0;
@@ -645,7 +646,7 @@
       for(let i=e.resultIndex;i<e.results.length;i++){
         const res=e.results[i];
         if(res.isFinal){
-          if(i>processedFinalIndex){ processedFinalIndex=i; addPhrase(res[0].transcript); }
+          if(i>processedFinalIndex){ processedFinalIndex=i; scheduleFinalCommit(res[0].transcript); }
           // else: same final result re-delivered by the browser — skip, already logged.
         } else interim+=res[0].transcript;
       }
@@ -703,6 +704,7 @@
   }
   function stopListen(){
     stopSimPhrases();
+    flushPendingFinal(); // don't lose a phrase still waiting to see if it continues
     state.listening=false; setStt('',false); syncMain(); maybeEndSession();
     if(recognition){ try{ recognition.stop(); }catch(e){} }
   }
@@ -1398,10 +1400,12 @@
       const sc=Math.min(1,(window.innerWidth-pad*2)/390,(window.innerHeight-pad*2)/844);
       stage.style.transform='scale('+sc+')';
     }
+    stage.classList.add('ready'); // reveal only once correctly scaled — no more flash of native size
   }
   window.addEventListener('resize',fit);
   window.addEventListener('orientationchange',fit);
   if(window.matchMedia){ try{ window.matchMedia('(display-mode: standalone)').addEventListener('change',fit); }catch(e){} }
+  if(document.fonts && document.fonts.ready){ document.fonts.ready.then(fit).catch(()=>{}); }
 
   /* ---------- service worker ---------- */
   function registerSW(){
@@ -1418,7 +1422,16 @@
       if(!hadControllerBefore) return; // first install taking control — not an update
       if(reloadedForUpdate) return; reloadedForUpdate=true;
       try{ if(sessionStorage.getItem('fantasma_sw_reloaded')==='1') return; sessionStorage.setItem('fantasma_sw_reloaded','1'); }catch(e){}
-      location.reload();
+      // A short buffer avoids reloading mid-paint/mid-interaction: wait a beat,
+      // and if the person is actively typing (e.g. a PIN), wait for them to finish
+      // instead of yanking the page out from under them.
+      const doReload=()=>{
+        const el=document.activeElement;
+        const typing = el && (el.id==='pinInput' || el.id==='pinInput2' || el.id==='cloudCredInput');
+        if(typing){ setTimeout(doReload, 800); return; }
+        location.reload();
+      };
+      setTimeout(doReload, 600);
     });
     navigator.serviceWorker.register('sw.js').then(reg=>{
       reg.update().catch(()=>{});
@@ -1427,6 +1440,7 @@
 
   /* ---------- boot ---------- */
   async function boot(){
+    fit(); // scale immediately, before any awaits, so the stage reveals as soon as possible
     loadPersisted();
     try{ await loadCloud(); }catch(e){}
     parseDropboxRedirect();
